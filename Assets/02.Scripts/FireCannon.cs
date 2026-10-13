@@ -24,6 +24,7 @@ public class FireCannon : MonoBehaviour
     void Fire()
     {
         sfx.PlayOneShot(fireSfx, 1.0f);
-        Instantiate(cannon, firePos.position, firePos.rotation);
+        GameObject obj = Instantiate(cannon, firePos.position, firePos.rotation);
+        obj.GetComponent<Cannon>().owner = transform.root; // 자기 포탄에 맞지 않도록 발사한 탱크를 기록
     }
 }
