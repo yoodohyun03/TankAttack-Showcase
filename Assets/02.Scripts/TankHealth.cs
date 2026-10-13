@@ -34,6 +34,14 @@ public class TankHealth : MonoBehaviour
         }
     }
 
+    // 최대 HP를 바꾸고 체력을 가득 채움 (난이도 조절용)
+    public void SetMaxHp(float value)
+    {
+        maxHp = value;
+        currHp = maxHp;
+        OnHpChanged?.Invoke(currHp, maxHp);
+    }
+
     // HP 회복 아이템용
     public void Heal(float amount)
     {

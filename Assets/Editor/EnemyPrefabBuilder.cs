@@ -41,15 +41,15 @@ public static class EnemyPrefabBuilder
             // 정찰형: 작고 빠르고 약함. 가까이 붙어서 자주 쏨
             new Spec { name = "Enemy_Scout", type = EnemyTank.EnemyType.Scout, tint = new Color(0.95f, 0.85f, 0.45f), scale = 0.8f,
                 hp = 60, moveSpeed = 16, turnSpeed = 90, stopDistance = 35, retreatDistance = 0,
-                attackRange = 110, fireInterval = 2.0f, damage = 8, launchSpeed = 120, shellLifeTime = 3, spread = 2.5f, highArc = false, minPitch = -30 },
+                attackRange = 110, fireInterval = 3.0f, damage = 5, launchSpeed = 120, shellLifeTime = 3, spread = 4.0f, highArc = false, minPitch = -30 },
             // 중전차: 크고 느리고 단단함. 한 방이 셈
             new Spec { name = "Enemy_Heavy", type = EnemyTank.EnemyType.Heavy, tint = new Color(0.55f, 0.25f, 0.22f), scale = 1.25f,
                 hp = 250, moveSpeed = 6, turnSpeed = 30, stopDistance = 30, retreatDistance = 0,
-                attackRange = 90, fireInterval = 4.0f, damage = 25, launchSpeed = 120, shellLifeTime = 3, spread = 1.0f, highArc = false, minPitch = -30 },
+                attackRange = 90, fireInterval = 5.0f, damage = 15, launchSpeed = 120, shellLifeTime = 3, spread = 2.5f, highArc = false, minPitch = -30 },
             // 자주포: 멀리서 곡사로 포격. 가까이 오면 후진
             new Spec { name = "Enemy_Artillery", type = EnemyTank.EnemyType.Artillery, tint = new Color(0.4f, 0.5f, 0.65f), scale = 1.0f,
                 hp = 90, moveSpeed = 8, turnSpeed = 45, stopDistance = 160, retreatDistance = 100,
-                attackRange = 260, fireInterval = 6.0f, damage = 30, launchSpeed = 55, shellLifeTime = 15, spread = 3.0f, highArc = true, minPitch = -75 },
+                attackRange = 260, fireInterval = 8.0f, damage = 20, launchSpeed = 55, shellLifeTime = 15, spread = 4.5f, highArc = true, minPitch = -75 },
         };
 
         foreach (Spec spec in specs)

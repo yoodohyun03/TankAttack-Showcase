@@ -42,6 +42,7 @@ public class EnemyTank : MonoBehaviour
     AudioSource sfx;
     AudioClip fireSfx;
     float fireTimer;
+    float stuckTimer;
     bool isDead = false;
 
     void Awake()
@@ -78,6 +79,8 @@ public class EnemyTank : MonoBehaviour
     {
         if (isDead || target == null) return;
 
+        CheckStuck();
+
         float dist = Vector3.Distance(tr.position, target.position);
         Move(dist);
         bool aimed = Aim(out bool inRange);
@@ -87,6 +90,27 @@ public class EnemyTank : MonoBehaviour
         {
             Fire();
             fireTimer = fireInterval;
+        }
+    }
+
+    // 뒤집히거나 지형 아래로 빠진 상태가 2초 넘게 지속되면 바로 세워서 땅 위에 다시 올려놓음
+    void CheckStuck()
+    {
+        Terrain terrain = Terrain.activeTerrain;
+        float groundY = terrain != null ? terrain.SampleHeight(tr.position) + terrain.transform.position.y : tr.position.y;
+        bool flipped = Vector3.Dot(tr.up, Vector3.up) < 0.3f;
+        bool underGround = tr.position.y < groundY - 3.0f;
+
+        stuckTimer = (flipped || underGround) ? stuckTimer + Time.deltaTime : 0.0f;
+        if (stuckTimer > 2.0f)
+        {
+            stuckTimer = 0.0f;
+            Rigidbody rb = GetComponent<Rigidbody>();
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            tr.SetPositionAndRotation(new Vector3(tr.position.x, groundY + 1.5f, tr.position.z),
+                                      Quaternion.Euler(0.0f, tr.eulerAngles.y, 0.0f));
+            Debug.Log($"{name}: 뒤집힘/빠짐 감지 → 위치 복구");
         }
     }
 

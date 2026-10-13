@@ -15,19 +15,19 @@ public class TurretCtrl : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        // 마우스 위치 대신 화면 중앙(조준점)에서 Ray를 쏨 (TankCamera가 마우스로 시점을 돌림)
+        Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
         Debug.DrawRay(ray.origin, ray.direction * 100.0f, Color.green);
-        //Ray가 8번째 레이어(Terrain)과 충돌되면 hit에 저장
-        if (Physics.Raycast(ray, out hit, Mathf.Infinity, 1 << 8))
-        {
-            //Raycast: 월드공간 기준을 현재 tr(터렛)을 중심으로 한 지역 좌표계(Local)로 변환
-            //터렛 입장에서 목표물이 어디에 있는지(방향) 확인이 가능함
-            Vector3 relative = tr.InverseTransformPoint(hit.point);
-            //터렛의 정면(Z축)을 기준으로 목표지점(X, Z좌표)까지의 각도를 구함,
-            //계산된 라디안 값을 Mathf.Rad2Deg를 곱해 Degree(일반적인 각도)로 변환
-            float angle = Mathf.Atan2(relative.x, relative.z) * Mathf.Rad2Deg;
-            //구한 각도(angle)에 시간 오차를 보정하여 Y축을 부드럽게 회전
-            tr.Rotate(0, angle * Time.deltaTime * rotSpeed, 0);
-        }
+        //Ray가 8번째 레이어(Terrain)과 충돌되면 hit에 저장, 하늘을 보고 있으면 Ray 방향의 먼 지점을 목표로 함
+        Vector3 aimPoint = Physics.Raycast(ray, out hit, Mathf.Infinity, 1 << 8) ? hit.point : ray.GetPoint(1000.0f);
+
+        //Raycast: 월드공간 기준을 현재 tr(터렛)을 중심으로 한 지역 좌표계(Local)로 변환
+        //터렛 입장에서 목표물이 어디에 있는지(방향) 확인이 가능함
+        Vector3 relative = tr.InverseTransformPoint(aimPoint);
+        //터렛의 정면(Z축)을 기준으로 목표지점(X, Z좌표)까지의 각도를 구함,
+        //계산된 라디안 값을 Mathf.Rad2Deg를 곱해 Degree(일반적인 각도)로 변환
+        float angle = Mathf.Atan2(relative.x, relative.z) * Mathf.Rad2Deg;
+        //구한 각도(angle)에 시간 오차를 보정하여 Y축을 부드럽게 회전
+        tr.Rotate(0, angle * Time.deltaTime * rotSpeed, 0);
     }
 }
