@@ -3,8 +3,11 @@ using UnityEngine;
 
 public class Cannon : MonoBehaviour
 {
-    public float speed = 6000.0f;
+    // 발사 속도(m/s). 예전 AddForce(6000) 방식과 같은 속도(6000 × 0.02s ÷ 질량 1 = 120m/s)
+    // 속도를 직접 지정해야 탄도 계산(Ballistics)이 정확하게 맞는다.
+    public float launchSpeed = 120.0f;
     public float damage = 20.0f;
+    public float lifeTime = 3.0f; // 아무것도 안 맞았을 때 사라지는 시간 (높은 탄도는 길게)
     public GameObject expEffect;
     [HideInInspector] public Transform owner; // 발사한 탱크 (자기 포탄에 맞지 않도록)
     private CapsuleCollider _collider;
@@ -16,8 +19,8 @@ public class Cannon : MonoBehaviour
     {
         _collider = GetComponent<CapsuleCollider>();
         _rigidbody = GetComponent<Rigidbody>();
-        GetComponent<Rigidbody>().AddForce(transform.forward * speed);
-        StartCoroutine(this.ExplosionCannon(3.0f));
+        _rigidbody.linearVelocity = transform.forward * launchSpeed;
+        StartCoroutine(this.ExplosionCannon(lifeTime));
     }
     private void OnTriggerEnter(Collider other)
     {
@@ -28,14 +31,24 @@ public class Cannon : MonoBehaviour
 
         isExploded = true; // 같은 프레임에 여러 콜라이더에 닿아도 데미지는 한 번만
         TankHealth health = other.GetComponentInParent<TankHealth>();
-        if (health != null)
+        if (health != null && !IsFriendlyFire(health))
         {
             health.TakeDamage(damage);
         }
 
-        StopAllCoroutines(); // Start에서 시작한 3초 타이머 취소
+        StopAllCoroutines(); // Start에서 시작한 타이머 취소
         StartCoroutine(this.ExplosionCannon(0.0f));
     }
+
+    // 적끼리 쏜 포탄은 서로 데미지를 주지 않음
+    bool IsFriendlyFire(TankHealth target)
+    {
+        if (owner == null) return false;
+        bool ownerIsEnemy = owner.GetComponent<EnemyTank>() != null;
+        bool targetIsEnemy = target.GetComponent<EnemyTank>() != null;
+        return ownerIsEnemy && targetIsEnemy;
+    }
+
     IEnumerator ExplosionCannon(float tm)
     {
 
