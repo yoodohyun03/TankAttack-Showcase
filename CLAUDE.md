@@ -39,15 +39,21 @@
 - UI는 사용자가 직접 디자인할 예정 (강의 슬라이드 UI를 그대로 따라 하지 않음)
 - 커밋과 푸시는 사용자가 요청하면 Claude가 진행
 
-## 현재 구조 (강의 6주차까지 완료된 상태)
+## 현재 구조
 - 씬: `Assets/01.Scenes/scBattleField.unity`
+- 진행 상황과 기능별 설명은 `Docs/구현노트.md` 참고
 - 스크립트 (`Assets/02.Scripts`)
-  - `TankMove`: `Translate`와 `Rotate`로 이동과 회전. Rigidbody mass 2000, centerOfMass (0,-0.5,0)
-  - `TankAnim`: Track 머티리얼의 `SetTextureOffset`(_MainTex, _BumpMap)으로 무한궤도 애니메이션
-  - `SmoothFollow`: Main Camera가 탱크 자식 `CamPivot`을 따라감
-  - `TurretCtrl`: 마우스 레이캐스트(8번 TERRAIN 레이어), `InverseTransformPoint`와 `Atan2`로 포탑 회전
-  - `CannonCtrl`: 마우스 휠로 포신 상하 조절, `Mathf.Clamp`로 각도 제한 (minAngle/maxAngle)
-  - `FireCannon`: 마우스 왼쪽 버튼으로 `Resources.Load("Cannon")` 생성, `FirePos`에서 발사, `PlayOneShot` 사운드
-  - `Cannon`: `AddForce` 6000으로 발사. `OnTriggerEnter`에 맞으면 즉시, 안 맞으면 3초 뒤 폭발 코루틴 실행
-- 포탄 프리팹과 발사 사운드는 `Assets/Resources`에 있음
-- 주의: `Assets/03.Prefabs/ExplosionPack` 폭발 프리팹은 파티클이 깨져 있음 → 무료 에셋으로 교체 필요
+  - 수업 코드: `TankMove`(이동), `TankAnim`(궤도 애니메이션), `SmoothFollow`(옛 카메라, `TankCamera`가 자동으로 끔)
+  - `TurretCtrl`: 화면 중앙(조준점)에서 Ray를 쏴 포탑 회전
+  - `CannonCtrl`: 마우스 휠로 포신 상하, `Mathf.Clamp`로 각도 제한
+  - `TankCamera`: 마우스로 도는 3인칭 카메라, 커서 잠금(Esc 해제)
+  - `FireCannon`: 포탄 3종(1/2/3키), 재장전, 공격력 배율(`damageMultiplier`)
+  - `Cannon`: 속도 직접 지정 발사(`launchSpeed`), 직격/범위 피해, 자기 피격·오인 사격·중복 폭발 방지
+  - `TankHealth`: 체력 공용 컴포넌트(`OnHpChanged`, `OnDeath` 이벤트)
+  - `EnemyTank`: 적 AI(추적·정지·후진, 탄도 조준, 뒤집힘 복구), `OnEnemyDied` 정적 이벤트
+  - `Ballistics`: 발사 각도 계산(적 AI, 지도 포격 공용)
+  - `WaveManager`: 5웨이브, 소환 위치 선정, 승패 판정, 난이도 배율, 임시 HUD
+- `Assets/Editor/EnemyPrefabBuilder.cs`: 메뉴 `Tools > TankAttack > Build Enemy Prefabs`로 적 3종 프리팹 생성 (수치를 바꾸면 다시 실행)
+- 포탄 프리팹, 발사 사운드, 적 프리팹(`Enemies/`)은 `Assets/Resources`에 있음
+- 임시 UI는 `OnGUI`로 표시 중. 사용자가 직접 UI를 만들면 각 스크립트의 이벤트에 연결하고 OnGUI를 끌 것
+- 주의: `Assets/03.Prefabs/ExplosionPack` 폭발 프리팹은 파티클이 깨져 있음 → 교체 필요

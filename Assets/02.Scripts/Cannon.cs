@@ -7,6 +7,7 @@ public class Cannon : MonoBehaviour
     // 속도를 직접 지정해야 탄도 계산(Ballistics)이 정확하게 맞는다.
     public float launchSpeed = 120.0f;
     public float damage = 20.0f;
+    public float splashRadius = 0.0f; // 0보다 크면 범위 피해 (고폭탄)
     public float lifeTime = 3.0f; // 아무것도 안 맞았을 때 사라지는 시간 (높은 탄도는 길게)
     public GameObject expEffect;
     [HideInInspector] public Transform owner; // 발사한 탱크 (자기 포탄에 맞지 않도록)
@@ -30,14 +31,39 @@ public class Cannon : MonoBehaviour
         if (other.GetComponentInParent<Cannon>() != null) return;
 
         isExploded = true; // 같은 프레임에 여러 콜라이더에 닿아도 데미지는 한 번만
-        TankHealth health = other.GetComponentInParent<TankHealth>();
-        if (health != null && !IsFriendlyFire(health))
+        if (splashRadius > 0.0f)
         {
-            health.TakeDamage(damage);
+            ApplySplashDamage(); // 고폭탄: 폭발 지점 주변 전체에 피해
+        }
+        else
+        {
+            TankHealth health = other.GetComponentInParent<TankHealth>();
+            if (health != null && !IsFriendlyFire(health))
+            {
+                health.TakeDamage(damage);
+            }
         }
 
         StopAllCoroutines(); // Start에서 시작한 타이머 취소
         StartCoroutine(this.ExplosionCannon(0.0f));
+    }
+
+    // 범위 피해: 반경 안의 탱크마다 거리에 따라 피해 감소 (폭심 100% → 가장자리 30%)
+    void ApplySplashDamage()
+    {
+        System.Collections.Generic.HashSet<TankHealth> damaged = new System.Collections.Generic.HashSet<TankHealth>();
+        foreach (Collider col in Physics.OverlapSphere(transform.position, splashRadius))
+        {
+            TankHealth health = col.GetComponentInParent<TankHealth>();
+            // 한 탱크에 콜라이더가 여러 개여도 한 번만, 자기 자신과 아군은 제외
+            if (health == null || !damaged.Add(health)) continue;
+            if (owner != null && health.transform.IsChildOf(owner)) continue;
+            if (IsFriendlyFire(health)) continue;
+
+            float dist = Vector3.Distance(transform.position, col.ClosestPoint(transform.position));
+            float falloff = Mathf.Lerp(1.0f, 0.3f, dist / splashRadius);
+            health.TakeDamage(damage * falloff);
+        }
     }
 
     // 적끼리 쏜 포탄은 서로 데미지를 주지 않음
