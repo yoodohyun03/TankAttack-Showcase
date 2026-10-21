@@ -26,8 +26,11 @@ public class FireCannon : MonoBehaviour
     public GameObject cannon = null;
     public Transform firePos;
     public float damageMultiplier = 1.0f; // 공격력 아이템용
+    public float normalSpread = 1.5f;     // 일반 조준 명중 오차 (도)
+    public float precisionSpread = 0.2f;  // 정밀 조준 명중 오차 (도)
     AudioClip fireSfx = null;
     AudioSource sfx = null;
+    TankCamera tankCam;
 
     public int CurrentIndex { get; private set; }
     public ShellType Current => shellTypes[CurrentIndex];
@@ -41,6 +44,11 @@ public class FireCannon : MonoBehaviour
         cannon = (GameObject)Resources.Load("Cannon");
         fireSfx = Resources.Load<AudioClip>("CannonFire");
         sfx = GetComponent<AudioSource>();
+    }
+
+    void Start()
+    {
+        tankCam = FindAnyObjectByType<TankCamera>();
     }
 
     // Update is called once per frame
@@ -74,7 +82,10 @@ public class FireCannon : MonoBehaviour
     {
         ShellType type = Current;
         sfx.PlayOneShot(fireSfx, 1.0f);
-        GameObject obj = Instantiate(cannon, firePos.position, firePos.rotation);
+        // 명중 오차: 일반 조준은 크게, 정밀 조준은 작게
+        float spread = (tankCam != null && tankCam.IsPrecision) ? precisionSpread : normalSpread;
+        Quaternion offset = Quaternion.Euler(UnityEngine.Random.Range(-spread, spread), UnityEngine.Random.Range(-spread, spread), 0.0f);
+        GameObject obj = Instantiate(cannon, firePos.position, firePos.rotation * offset);
 
         Cannon shell = obj.GetComponent<Cannon>();
         shell.owner = transform.root; // 자기 포탄에 맞지 않도록 발사한 탱크를 기록

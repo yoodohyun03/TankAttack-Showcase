@@ -3,23 +3,22 @@ using UnityEngine;
 public class TurretCtrl : MonoBehaviour
 {
     Transform tr;
-    RaycastHit hit; //Ray의 지면에 맞은 위치를 저장할 변수
     public float rotSpeed = 5.0f;
+    TankCamera tankCam; // 조준점(AimPoint)을 계산해 주는 카메라
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         tr = GetComponent<Transform>();
+        tankCam = FindAnyObjectByType<TankCamera>();
     }
 
     // Update is called once per frame
     void Update()
     {
-        // 마우스 위치 대신 화면 중앙(조준점)에서 Ray를 쏨 (TankCamera가 마우스로 시점을 돌림)
-        Ray ray = Camera.main.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0.0f));
-        Debug.DrawRay(ray.origin, ray.direction * 100.0f, Color.green);
-        //Ray가 8번째 레이어(Terrain)과 충돌되면 hit에 저장, 하늘을 보고 있으면 Ray 방향의 먼 지점을 목표로 함
-        Vector3 aimPoint = Physics.Raycast(ray, out hit, Mathf.Infinity, 1 << 8) ? hit.point : ray.GetPoint(1000.0f);
+        if (tankCam == null) return;
+        // 화면 중앙 조준점이 가리키는 지점 (TankCamera가 Raycast로 계산)
+        Vector3 aimPoint = tankCam.AimPoint;
 
         //Raycast: 월드공간 기준을 현재 tr(터렛)을 중심으로 한 지역 좌표계(Local)로 변환
         //터렛 입장에서 목표물이 어디에 있는지(방향) 확인이 가능함
