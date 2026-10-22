@@ -39,7 +39,8 @@ public class CannonCtrl : MonoBehaviour
         Vector3 aimPoint = tankCam.AimPoint;
         Vector3 dir = (aimPoint - tr.position).normalized;
 
-        if (tankCam.IsPrecision && fireCannon != null)
+        // 정밀 조준이거나 지도 포격 중이면 탄도 계산
+        if ((tankCam.IsPrecision || tankCam.AimOverride.HasValue) && fireCannon != null)
         {
             float speed = fireCannon.Current.launchSpeed;
             if (Ballistics.TryGetLaunchAngle(tr.position, aimPoint, speed, false, out float launchAngle))

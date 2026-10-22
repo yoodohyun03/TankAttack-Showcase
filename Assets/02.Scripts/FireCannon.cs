@@ -63,7 +63,7 @@ public class FireCannon : MonoBehaviour
         }
 
         // 커서가 풀려 있을 때(Esc)의 클릭은 커서를 다시 잠그는 용도라 발사하지 않음
-        if (Input.GetMouseButtonDown(0) && Cursor.lockState == CursorLockMode.Locked && ReloadRemaining <= 0.0f)
+        if (Input.GetMouseButtonDown(0) && Cursor.lockState == CursorLockMode.Locked && ReloadRemaining <= 0.0f && !MapStrike.IsBusy)
         {
             Fire();
         }
@@ -80,18 +80,37 @@ public class FireCannon : MonoBehaviour
 
     void Fire()
     {
-        ShellType type = Current;
-        sfx.PlayOneShot(fireSfx, 1.0f);
         // 명중 오차: 일반 조준은 크게, 정밀 조준은 작게
         float spread = (tankCam != null && tankCam.IsPrecision) ? precisionSpread : normalSpread;
         Quaternion offset = Quaternion.Euler(UnityEngine.Random.Range(-spread, spread), UnityEngine.Random.Range(-spread, spread), 0.0f);
-        GameObject obj = Instantiate(cannon, firePos.position, firePos.rotation * offset);
+        SpawnShell(firePos.rotation * offset, 3.0f);
+        ReloadRemaining = Current.reloadTime;
+    }
+
+    // 지도 포격용: 목표 지점에 떨어지도록 탄도를 계산해서 바로 발사 (재장전과 무관)
+    // 사거리 밖이면 false
+    public bool FireAt(Vector3 target)
+    {
+        float speed = Current.launchSpeed;
+        if (!Ballistics.TryGetLaunchAngle(firePos.position, target, speed, false, out float angle)) return false;
+        Vector3 dir = Ballistics.GetLaunchDirection(firePos.position, target, angle);
+        SpawnShell(Quaternion.LookRotation(dir), 10.0f);
+        return true;
+    }
+
+    // 현재 포탄 종류로 포탄 하나를 생성
+    void SpawnShell(Quaternion rotation, float lifeTime)
+    {
+        ShellType type = Current;
+        sfx.PlayOneShot(fireSfx, 1.0f);
+        GameObject obj = Instantiate(cannon, firePos.position, rotation);
 
         Cannon shell = obj.GetComponent<Cannon>();
         shell.owner = transform.root; // 자기 포탄에 맞지 않도록 발사한 탱크를 기록
         shell.damage = type.damage * damageMultiplier;
         shell.splashRadius = type.splashRadius;
         shell.launchSpeed = type.launchSpeed;
+        shell.lifeTime = lifeTime;
 
         // 포탄 종류별로 궤적 색과 굵기를 다르게
         TrailRenderer trail = obj.GetComponent<TrailRenderer>();
@@ -101,8 +120,6 @@ public class FireCannon : MonoBehaviour
             trail.endColor = new Color(type.trailColor.r, type.trailColor.g, type.trailColor.b, 0.0f);
             trail.widthMultiplier *= type.trailWidth;
         }
-
-        ReloadRemaining = type.reloadTime;
     }
 
     // 임시 화면 표시 (직접 만든 UI가 생기면 지워도 됨)

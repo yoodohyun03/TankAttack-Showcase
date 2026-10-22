@@ -24,6 +24,7 @@ public class TankCamera : MonoBehaviour
 
     public bool IsPrecision { get; private set; }
     public Vector3 AimPoint { get; private set; }   // 조준점이 가리키는 월드 좌표
+    public Vector3? AimOverride { get; set; }       // 지도 포격 중에는 이 지점을 조준 (null이면 화면 중앙)
     public float AimDistance { get; private set; }  // 탱크에서 조준 지점까지 거리
 
     float yaw;
@@ -63,6 +64,8 @@ public class TankCamera : MonoBehaviour
     void Update()
     {
         // Esc로 커서 해제, 게임 화면 클릭하면 다시 잠금
+        // 지도가 열려 있는 동안에는 클릭이 지도 조작용이므로 커서를 잠그지 않음
+        if (MapStrike.IsMapOpen || MapStrike.ClosedFrame == Time.frameCount) return;
         if (Input.GetKeyDown(KeyCode.Escape)) SetCursorLock(false);
         else if (lockCursor && Input.GetMouseButtonDown(0)) SetCursorLock(true);
     }
@@ -116,6 +119,13 @@ public class TankCamera : MonoBehaviour
     // 화면 중앙에서 Ray를 쏴서 조준 지점을 구함. 내 탱크와 포탄(Trigger)은 무시
     void UpdateAimPoint()
     {
+        if (AimOverride.HasValue)
+        {
+            AimPoint = AimOverride.Value;
+            AimDistance = Vector3.Distance(target.position, AimPoint);
+            return;
+        }
+
         Ray ray = new Ray(tr.position, tr.forward);
         RaycastHit[] hits = Physics.RaycastAll(ray, 3000.0f, ~0, QueryTriggerInteraction.Ignore);
         float nearest = float.MaxValue;
