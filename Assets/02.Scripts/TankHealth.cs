@@ -15,9 +15,12 @@ public class TankHealth : MonoBehaviour
     public float CurrHp => currHp;
     public bool IsDead => isDead;
 
+    GameObject deathEffect; // 파괴 폭발 이펙트
+
     void Awake()
     {
         currHp = maxHp;
+        deathEffect = Resources.Load<GameObject>("TankExplosion");
     }
 
     public void TakeDamage(float damage)
@@ -55,6 +58,13 @@ public class TankHealth : MonoBehaviour
     {
         isDead = true;
         Debug.Log($"{name} 파괴됨");
+
+        if (deathEffect != null)
+        {
+            GameObject effect = Instantiate(deathEffect, transform.position + Vector3.up * 2.0f, Quaternion.identity);
+            Destroy(effect, 3.0f);
+
+        }
         OnDeath?.Invoke();
     }
 }

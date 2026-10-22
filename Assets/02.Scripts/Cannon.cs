@@ -84,7 +84,7 @@ public class Cannon : MonoBehaviour
         _rigidbody.isKinematic = true;  //물리엔진의 영향을 받지 않음
         //폭발 프리팹 생성
         GameObject obj = (GameObject)Instantiate(expEffect, transform.position, Quaternion.identity);
-        Destroy(obj, 1.0f);//폭발효과 1초뒤 사라짐,
+        Destroy(obj, 3.0f);//폭발효과 1초뒤 사라짐,
         Destroy(this.gameObject, 1.0f); //Trail Renderer가 사라질 때 까지 기다림
     }
     // Update is called once per frame
