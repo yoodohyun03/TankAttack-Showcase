@@ -11,7 +11,7 @@ public class MapStrike : MonoBehaviour
     [Header("포격")]
     public int salvoCount = 4;          // 연발 수
     public float salvoInterval = 0.4f;  // 연발 간격 (초)
-    public float scatterRadius = 8.0f;  // 목표 주변 흩어짐 반경 (m)
+    public float scatterRadius = 5.0f;  // 목표 주변 흩어짐 반경 (m)
     public float maxRange = 450.0f;     // 최대 사거리 (m)
     public float cooldown = 25.0f;      // 재사용 대기 (초)
     public float aimTime = 1.2f;        // 포탑이 목표 쪽으로 도는 시간
@@ -39,6 +39,7 @@ public class MapStrike : MonoBehaviour
     FireCannon fire;
     TankCamera tankCam;
     TankHealth health;
+    CannonCtrl cannonCtrl;  // 지도 포격 때 포신을 실제 발사 각도로 맞추기 위해
     Vector3? selected;      // 지도에서 고른 목표 지점
     float cooldownLeft;
     public float CooldownLeft => cooldownLeft;     // UI 표시용
@@ -57,6 +58,7 @@ public class MapStrike : MonoBehaviour
     {
         fire = GetComponent<FireCannon>();
         health = GetComponent<TankHealth>();
+        cannonCtrl = GetComponentInChildren<CannonCtrl>();
         tankCam = FindAnyObjectByType<TankCamera>();
         terrain = Terrain.activeTerrain;
         CreateMapCamera();
@@ -211,9 +213,24 @@ public class MapStrike : MonoBehaviour
         SetMapOpen(false);
         ShowMessage($"지도 포격 개시! ({salvoCount}발)");
 
-        // 포탑과 포신이 목표 쪽을 향하도록 조준점을 목표로 고정 (CannonCtrl이 탄도 계산으로 포신 각도 조절)
+        // 포탑이 목표 쪽을 향하도록 조준점을 목표로 고정
         tankCam.AimOverride = target;
-        yield return new WaitForSeconds(aimTime);
+
+        // 쏘기 전에 사격 방식(직사/곡사)을 먼저 정하고, 포신을 실제 발사 방향으로 들어 올림
+        // → 보이는 포신 각도와 실제 포탄이 나가는 각도가 일치
+        if (fire.TryGetStrikeSolution(target, out Vector3 firstDir, out _, out bool lob))
+        {
+            if (cannonCtrl != null) cannonCtrl.ForcedDirection = firstDir;
+            if (lob) ShowMessage("장애물이 있어 곡사로 포격합니다");
+        }
+
+        // 최소 aimTime만큼, 그리고 포신이 그 각도에 도달할 때까지 대기 (최대 3초)
+        float waited = 0.0f;
+        while (waited < 3.0f && (waited < aimTime || (cannonCtrl != null && !cannonCtrl.IsAimed)))
+        {
+            waited += Time.deltaTime;
+            yield return null;
+        }
 
         for (int i = 0; i < salvoCount; i++)
         {
@@ -222,14 +239,17 @@ public class MapStrike : MonoBehaviour
             Vector3 p = target + new Vector3(r.x, 0.0f, r.y);
             if (terrain != null) p.y = terrain.SampleHeight(p) + terrain.transform.position.y;
 
-            if (!fire.FireAt(p))
+            if (!fire.TryGetStrikeSolution(p, out Vector3 dir, out float speed, out bool shotLob))
             {
                 ShowMessage("사거리 밖입니다");
                 break;
             }
+            if (cannonCtrl != null) cannonCtrl.ForcedDirection = dir; // 흩어진 지점마다 포신도 살짝 따라감
+            fire.FireStrike(dir, speed, shotLob);
             yield return new WaitForSeconds(salvoInterval);
         }
 
+        if (cannonCtrl != null) cannonCtrl.ForcedDirection = null;
         tankCam.AimOverride = null;
         IsBusy = false;
         cooldownLeft = cooldown;
@@ -267,7 +287,7 @@ public class MapStrike : MonoBehaviour
         GUI.Label(new Rect(px.x, top - 40, px.width, 36), "전술 지도  -  목표 지점을 클릭하고 [포격]을 누르세요  (M / Esc: 닫기)", style);
 
         // 내 탱크와 적 위치 표시
-        DrawMarker(transform.position, "▲\n나", new Color(0.4f, 0.8f, 1.0f));
+        DrawPlayerMarker();
         foreach (EnemyTank ai in FindObjectsByType<EnemyTank>(FindObjectsSortMode.None))
         {
             if (ai.Health.IsDead) continue;
@@ -304,6 +324,38 @@ public class MapStrike : MonoBehaviour
             StartCoroutine(Strike(selected.Value));
         }
         GUI.enabled = true;
+    }
+
+    // 플레이어 표시: 노란 화살표가 탱크가 바라보는 방향으로 회전 + 깜빡이는 원 + "나" 글자 (검은 외곽선으로 눈에 띄게)
+    void DrawPlayerMarker()
+    {
+        Vector3 sp = mapCam.WorldToScreenPoint(transform.position);
+        if (!mapCam.pixelRect.Contains(sp)) return;
+        Vector2 center = new Vector2(sp.x, Screen.height - sp.y); // GUI 좌표 (위가 0)
+        Color yellow = new Color(1.0f, 0.92f, 0.2f);
+
+        // 깜빡이는 원: 크기가 커졌다 작아졌다 반복
+        float pulse = 1.0f + Mathf.PingPong(Time.unscaledTime * 1.5f, 0.6f);
+        GUIStyle ring = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(44 * pulse), alignment = TextAnchor.MiddleCenter };
+        ring.normal.textColor = new Color(yellow.r, yellow.g, yellow.b, 0.5f);
+        GUI.Label(new Rect(center.x - 60, center.y - 60, 120, 120), "○", ring);
+
+        // 방향 화살표: 지도는 북쪽(+Z)이 위라서 탱크의 Y 회전 각도만큼 돌리면 바라보는 방향이 됨
+        GUIStyle arrow = new GUIStyle(GUI.skin.label) { fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        Matrix4x4 saved = GUI.matrix;
+        GUIUtility.RotateAroundPivot(transform.eulerAngles.y, center);
+        arrow.normal.textColor = Color.black; // 외곽선용 그림자
+        GUI.Label(new Rect(center.x - 29, center.y - 29, 60, 60), "▲", arrow);
+        arrow.normal.textColor = yellow;
+        GUI.Label(new Rect(center.x - 30, center.y - 30, 60, 60), "▲", arrow);
+        GUI.matrix = saved;
+
+        // "나" 글자 (외곽선 효과)
+        GUIStyle label = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        label.normal.textColor = Color.black;
+        GUI.Label(new Rect(center.x - 39, center.y + 21, 80, 30), "나", label);
+        label.normal.textColor = yellow;
+        GUI.Label(new Rect(center.x - 40, center.y + 20, 80, 30), "나", label);
     }
 
     void DrawMarker(Vector3 world, string label, Color color)

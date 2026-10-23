@@ -90,18 +90,65 @@ public class FireCannon : MonoBehaviour
     }
 
     // 지도 포격용: 목표 지점에 떨어지도록 탄도를 계산해서 바로 발사 (재장전과 무관)
-    // 사거리 밖이면 false
+    // 1) 빠른 낮은 탄도로 쏴 보고, 궤적이 중간의 언덕·건물·나무에 막히면
+    // 2) 40° → 55° → 70°로 쏘아 올리는 곡사로 바꿔서 장애물을 넘김 (그 각도로 목표에 떨어지는 속도를 계산)
+    // 어떤 방법으로도 닿지 않으면 false
     public bool FireAt(Vector3 target)
     {
-        float speed = Current.launchSpeed;
-        if (!Ballistics.TryGetLaunchAngle(firePos.position, target, speed, false, out float angle)) return false;
-        Vector3 dir = Ballistics.GetLaunchDirection(firePos.position, target, angle);
-        SpawnShell(Quaternion.LookRotation(dir), 10.0f);
+        if (!TryGetStrikeSolution(target, out Vector3 dir, out float speed, out bool lob)) return false;
+        SpawnShell(Quaternion.LookRotation(dir), lob ? 30.0f : 20.0f, speed);
         return true;
     }
 
-    // 현재 포탄 종류로 포탄 하나를 생성
-    void SpawnShell(Quaternion rotation, float lifeTime)
+    // 지도 포격: 미리 정한 방향과 속도로 포탄 한 발 발사
+    public void FireStrike(Vector3 dir, float speed, bool lob)
+    {
+        SpawnShell(Quaternion.LookRotation(dir), lob ? 30.0f : 20.0f, speed);
+    }
+
+    // 지도 포격의 사격 방식을 정함: 발사 방향과 속도, 곡사 여부
+    // (MapStrike가 쏘기 전에 이걸로 포신 각도를 미리 맞춰서, 보이는 포신과 실제 포탄 방향이 일치하게 함)
+    public bool TryGetStrikeSolution(Vector3 target, out Vector3 dir, out float speed, out bool lob)
+    {
+        Vector3 origin = firePos.position;
+        Transform self = transform.root;
+        lob = false;
+
+        // 1) 낮은 탄도 (현재 포탄 속도)
+        speed = Current.launchSpeed;
+        bool lowOk = Ballistics.TryGetLaunchAngle(origin, target, speed, false, out float angle);
+        if (lowOk)
+        {
+            dir = Ballistics.GetLaunchDirection(origin, target, angle);
+            if (Ballistics.IsTrajectoryClear(origin, dir * speed, target, self)) return true;
+        }
+
+        // 2) 막히면 곡사
+        foreach (float lobAngle in new[] { 40.0f, 55.0f, 70.0f })
+        {
+            if (!Ballistics.TryGetSpeedForAngle(origin, target, lobAngle, out float lobSpeed)) continue;
+            Vector3 lobDir = Ballistics.GetLaunchDirection(origin, target, lobAngle);
+            if (Ballistics.IsTrajectoryClear(origin, lobDir * lobSpeed, target, self))
+            {
+                dir = lobDir;
+                speed = lobSpeed;
+                lob = true;
+                return true;
+            }
+        }
+
+        // 3) 다 막혀도 일단 낮은 탄도로 (가능하면)
+        if (lowOk)
+        {
+            dir = Ballistics.GetLaunchDirection(origin, target, angle);
+            return true;
+        }
+        dir = firePos.forward;
+        return false;
+    }
+
+    // 현재 포탄 종류로 포탄 하나를 생성 (speed를 주면 그 속도로, 아니면 포탄 기본 속도)
+    void SpawnShell(Quaternion rotation, float lifeTime, float speed = -1.0f)
     {
         ShellType type = Current;
         sfx.PlayOneShot(fireSfx, 1.0f);
@@ -111,7 +158,7 @@ public class FireCannon : MonoBehaviour
         shell.owner = transform.root; // 자기 포탄에 맞지 않도록 발사한 탱크를 기록
         shell.damage = type.damage * damageMultiplier;
         shell.splashRadius = type.splashRadius;
-        shell.launchSpeed = type.launchSpeed;
+        shell.launchSpeed = speed > 0.0f ? speed : type.launchSpeed;
         shell.lifeTime = lifeTime;
 
         // 포탄 종류별로 궤적 색과 굵기를 다르게

@@ -20,6 +20,7 @@ public class EnemyTank : MonoBehaviour
     public float stopDistance = 40.0f;   // 이 거리 안이면 멈춰서 사격
     public float retreatDistance = 0.0f; // 이 거리보다 가까우면 후진 (0이면 사용 안 함)
     public float followDistance = 30.0f; // 아군: 싸울 적이 없을 때 플레이어와 유지할 거리
+    public bool stationary = false;      // true면 제자리 고정 (산 중턱 자주포): 차체와 포탑만 돌려서 조준
 
     [Header("공격")]
     public float attackRange = 120.0f;
@@ -229,6 +230,14 @@ public class EnemyTank : MonoBehaviour
     // 차체: 목표 쪽으로 돌면서 전진, 가까우면 정지(또는 후진)
     void Move(float dist)
     {
+        if (stationary)
+        {
+            // 고정 포대: 움직이지 않고 차체만 목표 쪽으로 돌림 (desiredSpeed는 0 그대로)
+            Vector3 to = target.position - tr.position;
+            to.y = 0.0f;
+            if (to.sqrMagnitude > 0.01f) desiredRotation = Quaternion.LookRotation(to);
+            return;
+        }
         MoveToward(target.position, stopDistance);
         if (retreatDistance > 0.0f && dist < retreatDistance)
         {

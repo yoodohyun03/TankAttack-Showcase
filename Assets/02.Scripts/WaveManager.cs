@@ -56,6 +56,15 @@ public class WaveManager : MonoBehaviour
     public float maxPathRise = 15.0f;         // 플레이어까지 가는 길에 이보다 높은 산등성이가 있으면 소환하지 않음 (m)
     public float maxPathSlope = 30.0f;        // 플레이어까지 가는 길에 이보다 가파른 곳이 있으면 소환하지 않음 (도)
 
+    [Header("자주포: 산 중턱 고정 포대 (지도 포격 대상)")]
+    public bool artilleryOnHills = true;
+    public float hillRadiusMin = 150.0f;      // 플레이어와의 거리 (자주포 사거리 260m, 지도 포격 사거리 450m 안)
+    public float hillRadiusMax = 240.0f;
+    public float hillMinHeight = 15.0f;       // 플레이어보다 이만큼 이상 높은 곳 (산 중턱)
+    public float hillMaxHeight = 70.0f;
+    public float hillMinSlope = 8.0f;         // 비탈 (너무 평평하면 산이 아님)
+    public float hillMaxSlope = 30.0f;        // 너무 가파르면 서 있을 수 없음
+
     [Header("엔딩 씬 이름 (Build Settings에 등록되어 있어야 이동)")]
     public string winSceneName = "scWin";
     public string loseSceneName = "scLose";
@@ -241,12 +250,18 @@ public class WaveManager : MonoBehaviour
             return;
         }
 
-        Vector3 pos = GetSpawnPosition();
+        // 자주포는 산 중턱 고정 포대로 (지도 포격으로 처리하기 좋은 대상), 못 찾으면 평소처럼
+        bool hillArtillery = type == EnemyTank.EnemyType.Artillery && artilleryOnHills && terrain != null;
+        Vector3 pos = Vector3.zero;
+        bool onHill = hillArtillery && TryGetHillSpawnPosition(out pos);
+        if (!onHill) pos = GetSpawnPosition();
+
         Vector3 toPlayer = player.position - pos;
         toPlayer.y = 0.0f;
         GameObject obj = Instantiate(prefab, pos, Quaternion.LookRotation(toPlayer));
         EnemyTank enemy = obj.GetComponent<EnemyTank>();
         enemy.damage *= enemyDamageScale;
+        if (hillArtillery) enemy.stationary = true; // 그 자리에 고정, 차체와 포탑만 돌려서 포격
         TankHealth enemyHealth = obj.GetComponent<TankHealth>();
         enemyHealth.SetMaxHp(enemyHealth.maxHp * enemyHpScale);
         aliveEnemies.Add(enemy);
@@ -292,6 +307,57 @@ public class WaveManager : MonoBehaviour
         if (!IsFreeOfBuildings(ground)) return false;
         if (!HasClearPathToPlayer(ground)) return false;
         return true;
+    }
+
+    // 자주포용: 플레이어 주변 150~240m 중 "산 중턱"인 자리를 찾음
+    // - 플레이어보다 15~70m 높고, 경사가 8~30°(서 있을 수 있는 비탈)인 곳
+    // - 플레이어와 그 자리 사이에 더 높은 산등성이가 없는 곳 (= 전장 쪽을 바라보는 안쪽 비탈, 산 바깥쪽 비탈 제외)
+    // - 맵 가장자리와 건물은 피함
+    bool TryGetHillSpawnPosition(out Vector3 result)
+    {
+        result = Vector3.zero;
+        Vector3 tPos = terrain.transform.position;
+        Vector3 size = terrain.terrainData.size;
+        const float margin = 30.0f;
+
+        for (int t = 0; t < 80; t++)
+        {
+            Vector2 dir = UnityEngine.Random.insideUnitCircle.normalized;
+            float radius = UnityEngine.Random.Range(hillRadiusMin, hillRadiusMax);
+            Vector3 pos = player.position + new Vector3(dir.x, 0.0f, dir.y) * radius;
+            if (pos.x < tPos.x + margin || pos.x > tPos.x + size.x - margin) continue;
+            if (pos.z < tPos.z + margin || pos.z > tPos.z + size.z - margin) continue;
+
+            Vector3 ground = GroundAt(pos);
+            float rise = ground.y - player.position.y;
+            if (rise < hillMinHeight || rise > hillMaxHeight) continue;
+
+            float steep = terrain.terrainData.GetSteepness((pos.x - tPos.x) / size.x, (pos.z - tPos.z) / size.z);
+            if (steep < hillMinSlope || steep > hillMaxSlope) continue;
+
+            if (HasHigherRidgeBetween(ground)) continue;
+            if (!IsFreeOfBuildings(ground)) continue;
+
+            result = ground;
+            return true;
+        }
+        Debug.Log("WaveManager: 자주포를 둘 산 중턱을 찾지 못해 평지에 고정 배치합니다.");
+        return false;
+    }
+
+    // 소환 자리와 플레이어 사이에 소환 자리보다 높은 산등성이가 있으면 true (산 바깥쪽 비탈)
+    bool HasHigherRidgeBetween(Vector3 from)
+    {
+        Vector3 to = player.position;
+        float dist = Vector3.Distance(new Vector3(from.x, 0, from.z), new Vector3(to.x, 0, to.z));
+        int steps = Mathf.CeilToInt(dist / 5.0f);
+        for (int i = 1; i < steps; i++)
+        {
+            Vector3 p = Vector3.Lerp(from, to, i / (float)steps);
+            float h = terrain.SampleHeight(p) + terrain.transform.position.y;
+            if (h > from.y + 5.0f) return true;
+        }
+        return false;
     }
 
     // 소환 위치에서 플레이어까지 직선으로 가는 길에 넘을 수 없는 산등성이나 급경사가 없는지 확인
