@@ -179,6 +179,94 @@ public static class HudLayoutTool
         Debug.Log("보스전 바로가기 버튼 추가 완료. Ctrl+S로 씬을 저장하세요.");
     }
 
+    // 메뉴 [Tools > TankAttack > Add Music Credit]
+    // scIntro를 연 상태에서 실행: 왼쪽 아래에 배경음악 출처(CC BY 4.0 표기)를 작은 글씨로 추가
+    [MenuItem("Tools/TankAttack/Add Music Credit")]
+    public static void AddMusicCredit()
+    {
+        Canvas canvas = Object.FindAnyObjectByType<Canvas>();
+        if (canvas == null)
+        {
+            Debug.LogError("Canvas가 있는 씬(scIntro)을 열고 실행하세요.");
+            return;
+        }
+        canvasTr = canvas.transform;
+        font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+        Text credit = GetText("MusicCredit", canvasTr, new Vector2(0, 0), new Vector2(30, 30), new Vector2(1100, 60), 20, false, TextAnchor.LowerLeft, new Color(1f, 1f, 1f, 0.75f));
+        credit.text = "Music: \"Clash Defiant\" Kevin MacLeod (incompetech.com)\nLicensed under Creative Commons: By Attribution 4.0 License (creativecommons.org/licenses/by/4.0/)";
+
+        EditorSceneManager.MarkSceneDirty(canvas.gameObject.scene);
+        Debug.Log("음악 출처 표기 추가 완료. Ctrl+S로 씬을 저장하세요.");
+    }
+
+    // 메뉴 [Tools > TankAttack > Add Pause Menu]
+    // scBattleField의 Canvas에 Esc 일시정지 화면(계속하기 / 처음으로 / 종료)을 만들고 PauseMenu에 연결
+    // 직접 다듬은 기존 HUD 배치는 건드리지 않음
+    [MenuItem("Tools/TankAttack/Add Pause Menu")]
+    public static void AddPauseMenu()
+    {
+        Canvas canvas = Object.FindAnyObjectByType<Canvas>();
+        if (canvas == null || canvas.GetComponent<GameHUD>() == null)
+        {
+            Debug.LogError("GameHUD가 붙은 Canvas가 있는 scBattleField를 열고 실행하세요.");
+            return;
+        }
+        canvasTr = canvas.transform;
+        font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        Sprite uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+
+        PauseMenu menu = canvas.GetComponent<PauseMenu>();
+        if (menu == null) menu = Undo.AddComponent<PauseMenu>(canvas.gameObject);
+
+        // 화면 전체를 어둡게 덮는 패널 (맨 위에 그려지도록 Canvas의 마지막 자식으로)
+        Image panel = GetImage("PausePanel", canvasTr, Vector2.zero, Vector2.zero, Vector2.zero, new Color(0.03f, 0.05f, 0.08f, 0.75f), null);
+        Stretch(panel.rectTransform, 0);
+        panel.raycastTarget = true; // 뒤쪽 UI가 눌리지 않도록 클릭을 막음
+        panel.transform.SetAsLastSibling();
+
+        Text title = GetText("PauseTitle", panel.transform, new Vector2(0.5f, 0.5f), new Vector2(0, 200), new Vector2(800, 120), 90, true, TextAnchor.MiddleCenter, new Color(0.75f, 0.9f, 1f));
+        title.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        title.text = "일시정지";
+        Text hint = GetText("PauseHint", panel.transform, new Vector2(0.5f, 0.5f), new Vector2(0, 110), new Vector2(800, 50), 30, false, TextAnchor.MiddleCenter, Color.white);
+        hint.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        hint.text = "Esc를 다시 누르면 계속합니다";
+
+        AddMenuButton("ResumeBtn", "계속하기", panel.transform, new Vector2(0, 0), uiSprite, menu.Resume);
+        AddMenuButton("IntroBtn", "처음으로", panel.transform, new Vector2(0, -115), uiSprite, menu.GoToIntro);
+        AddMenuButton("QuitBtn", "게임 종료", panel.transform, new Vector2(0, -230), uiSprite, menu.QuitGame);
+
+        Undo.RecordObject(menu, "Add Pause Menu");
+        menu.panel = panel.gameObject;
+        panel.gameObject.SetActive(false); // 평소에는 숨김, Esc로 켜짐
+
+        EditorSceneManager.MarkSceneDirty(canvas.gameObject.scene);
+        Debug.Log("일시정지 메뉴 추가 완료. Ctrl+S로 씬을 저장하세요.");
+    }
+
+    // 메뉴용 버튼 하나 (Intro·엔딩 씬과 같은 스타일)
+    static void AddMenuButton(string name, string label, Transform parent, Vector2 pos, Sprite sprite, UnityEngine.Events.UnityAction action)
+    {
+        Image img = GetImage(name, parent, new Vector2(0.5f, 0.5f), pos, new Vector2(460, 90), new Color(0.92f, 0.96f, 1f, 0.95f), sprite);
+        img.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        img.raycastTarget = true;
+        Button btn = img.GetComponent<Button>();
+        if (btn == null) btn = Undo.AddComponent<Button>(img.gameObject);
+        Undo.RecordObject(btn, "Add Pause Menu");
+        btn.targetGraphic = img;
+        for (int i = btn.onClick.GetPersistentEventCount() - 1; i >= 0; i--)
+        {
+            UnityEditor.Events.UnityEventTools.RemovePersistentListener(btn.onClick, i);
+        }
+        UnityEditor.Events.UnityEventTools.AddPersistentListener(btn.onClick, action);
+
+        Text t = GetText(name + "Label", img.transform, Vector2.zero, Vector2.zero, Vector2.zero, 38, true, TextAnchor.MiddleCenter, new Color(0.1f, 0.16f, 0.24f));
+        Stretch(t.rectTransform, 0);
+        t.text = label;
+        Outline o = t.GetComponent<Outline>();
+        if (o != null) Undo.DestroyObjectImmediate(o); // 밝은 버튼 위 글자라 외곽선 불필요
+    }
+
     // 이름으로 찾고, 없으면 새로 만듦
     static RectTransform GetOrCreate(string name, Transform parent, bool _)
     {

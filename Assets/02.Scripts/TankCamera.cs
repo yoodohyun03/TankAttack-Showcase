@@ -67,6 +67,8 @@ public class TankCamera : MonoBehaviour
         // Esc로 커서 해제, 게임 화면 클릭하면 다시 잠금
         // 지도가 열려 있는 동안에는 클릭이 지도 조작용이므로 커서를 잠그지 않음
         if (MapStrike.IsMapOpen || MapStrike.ClosedFrame == Time.frameCount) return;
+        // 일시정지 메뉴가 Esc와 클릭을 처리하는 동안에는 카메라가 커서를 건드리지 않음
+        if (PauseState.IsPaused || PauseState.ChangedFrame == Time.frameCount) return;
         if (Input.GetKeyDown(KeyCode.Escape)) SetCursorLock(false);
         else if (lockCursor && Input.GetMouseButtonDown(0)) SetCursorLock(true);
     }

@@ -34,6 +34,9 @@ public class WaveManager : MonoBehaviour
     public int allyCount = 2;            // 함께 싸우는 아군 AI 수
     public bool reinforceAllies = true;  // 웨이브 클리어 때마다 파괴된 아군을 다시 채움(증원)
 
+    [Header("채점용 단축키 (F10: 즉시 승리, F9: 즉시 패배)")]
+    public bool enableCheatKeys = true;
+
     [Header("진행")]
     public float firstWaveDelay = 3.0f;  // 게임 시작 후 첫 웨이브까지 대기
     public float breakTime = 5.0f;       // 웨이브 사이 휴식 시간
@@ -311,6 +314,34 @@ public class WaveManager : MonoBehaviour
         if (IsGameOver) return;
         EnemiesLeft = Mathf.Max(0, EnemiesLeft - 1);
         OnEnemiesLeftChanged?.Invoke(EnemiesLeft);
+    }
+
+    // 채점·확인용 단축키: 플레이 도중 바로 엔딩으로 (Intro에는 표시하지 않고 기획서·README에만 안내)
+    //   F10: 즉시 승리 (5웨이브와 보스를 모두 깬 것으로 처리)   F9: 즉시 패배
+    void Update()
+    {
+        if (!enableCheatKeys || IsGameOver || PauseState.IsPaused) return;
+
+        if (Input.GetKeyDown(KeyCode.F10))
+        {
+            Debug.Log("채점용 단축키: 즉시 승리");
+            KillAllEnemies();
+            EndGame(true);
+        }
+        else if (Input.GetKeyDown(KeyCode.F9))
+        {
+            Debug.Log("채점용 단축키: 즉시 패배");
+            EndGame(false);
+        }
+    }
+
+    // 승리 연출: 남은 적을 모두 파괴 (폭발 이펙트가 터지면서 엔딩으로 넘어감)
+    void KillAllEnemies()
+    {
+        foreach (EnemyTank enemy in aliveEnemies)
+        {
+            if (enemy != null && !enemy.Health.IsDead) enemy.Health.TakeDamage(enemy.Health.maxHp * 10.0f);
+        }
     }
 
     void HandlePlayerDied()

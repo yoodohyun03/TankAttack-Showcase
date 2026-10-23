@@ -64,7 +64,8 @@ public class FireCannon : MonoBehaviour
         }
 
         // 커서가 풀려 있을 때(Esc)의 클릭은 커서를 다시 잠그는 용도라 발사하지 않음
-        if (Input.GetMouseButtonDown(0) && Cursor.lockState == CursorLockMode.Locked && ReloadRemaining <= 0.0f && !MapStrike.IsBusy)
+        if (Input.GetMouseButtonDown(0) && Cursor.lockState == CursorLockMode.Locked && ReloadRemaining <= 0.0f && !MapStrike.IsBusy
+            && !PauseState.IsPaused && PauseState.ChangedFrame != Time.frameCount) // 일시정지 해제 클릭은 발사 안 함
         {
             Fire();
         }

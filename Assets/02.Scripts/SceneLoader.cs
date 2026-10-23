@@ -9,6 +9,10 @@ public class SceneLoader : MonoBehaviour
 
     void Start()
     {
+        // 일시정지 상태에서 씬을 옮겨 왔을 수 있으므로 시간과 일시정지 상태를 원래대로
+        Time.timeScale = 1.0f;
+        PauseState.IsPaused = false;
+
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
@@ -23,6 +27,8 @@ public class SceneLoader : MonoBehaviour
 
     public void StartGame()
     {
+        Time.timeScale = 1.0f;          // 일시정지(시간 0) 상태로 다음 씬이 시작되지 않도록
+        PauseState.IsPaused = false;
         SceneManager.LoadScene("scBattleField");
     }
     // 보스전 바로가기: 마지막(보스) 웨이브부터 게임 시작 (채점·시연용)

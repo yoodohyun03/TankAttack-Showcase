@@ -59,15 +59,16 @@
   - `TankHealth`: 체력 공용 컴포넌트, 진영(`Team`), `OnHpChanged`/`OnDeath`, 파괴 폭발
   - `EnemyTank`: 적·아군·보스 공용 AI(가장 가까운 상대 진영 추적, 탄도 조준, 보스 광폭화, 물리 이동, 장애물 회피, 끼임 탈출, 뒤집힘 복구), `OnEnemyDied`, `CurrentBoss`
   - `Ballistics`: 발사 각도 계산(적 AI, 정밀 조준, 지도 포격 공용)
-  - `WaveManager`: 5웨이브, 마지막 보스, 아군 소환·증원, 소환 위치 검사, 승패 판정, 적 위치 표시, `SkipToLastWave`(보스전 바로가기)
+  - `WaveManager`: 5웨이브, 마지막 보스, 아군 소환·증원, 소환 위치 검사, 승패 판정, 적 위치 표시, `SkipToLastWave`(보스전 바로가기), 채점용 단축키(F10 즉시 승리, F9 즉시 패배)
   - `MapStrike`: M키 전술 지도(확대·이동), 목표 지정, 4연발 포격, 쿨타임
   - `Item`, `ItemDropper`: 아이템 3종과 드롭 (사용자가 입력)
   - `SceneLoader`: 씬 전환 버튼, 보스전 바로가기 (사용자가 입력)
   - `GameHUD`: 게임 HUD와 보스 HP바
+  - `PauseMenu`, `PauseState`: Esc 일시정지 메뉴(`Time.timeScale = 0`), 다른 스크립트가 일시정지 여부 확인
 - 에디터 도구 (`Assets/Editor`, 메뉴 `Tools > TankAttack`)
   - `EnemyPrefabBuilder`: 적 3종·보스·아군 프리팹 생성 (수치를 바꾸면 다시 실행)
   - `UrpParticleMaterialConverter`: URP 전용 폭발 머티리얼을 Built-in으로 변환
-  - `HudLayoutTool`: HUD 자동 배치, 보스 HP바·보스전 바로가기 버튼 추가 (HUD는 사용자가 직접 다듬었으므로 Layout Game HUD는 다시 실행하지 말 것)
+  - `HudLayoutTool`: HUD 자동 배치, 보스 HP바·보스전 바로가기 버튼·일시정지 메뉴 추가 (HUD는 사용자가 직접 다듬었으므로 Layout Game HUD는 다시 실행하지 말 것)
   - `ItemDecorator`: 아이템 모양·조명 (사용자가 다듬은 뒤에는 다시 실행하지 말 것)
   - `WinterBaseBuilder`: 흰색 계열 군사 기지 배치, 건물 밑 지형 평탄화
 - `Assets/Resources`: 포탄, 발사 사운드, `Enemies/`(적·보스), `Allies/`, `Items/`, `TankExplosion`

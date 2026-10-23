@@ -127,6 +127,7 @@ public class MapStrike : MonoBehaviour
             return;
         }
 
+        if (PauseState.IsPaused) return; // 일시정지 중에는 지도 조작 안 함
         if (Input.GetKeyDown(mapKey) && !IsBusy) SetMapOpen(!IsMapOpen);
         if (!IsMapOpen) return;
 
