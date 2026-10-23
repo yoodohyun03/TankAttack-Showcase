@@ -52,6 +52,10 @@ public class WaveManager : MonoBehaviour
 
     [Header("테스트용 화면 표시 (UI 완성 후 끄기)")]
     public bool showDebugHud = true;
+    public bool showEnemyMarkers = true; // 적 위치·거리 표시 (게임 플레이용이라 따로 끌 수 있게 분리)
+
+    // UI에서 바로 쓸 수 있는 현재 상태 문구 ("WAVE 2 / 5", "WAVE 2 클리어!" 등)
+    public string StatusText => statusText;
 
     // UI가 구독해서 쓰는 이벤트
     public event Action<int, int> OnWaveStarted;     // (현재 웨이브 번호, 전체 웨이브 수)
@@ -269,13 +273,14 @@ public class WaveManager : MonoBehaviour
     // 임시 화면 표시. 직접 만든 UI가 완성되면 showDebugHud를 끄면 됨
     void OnGUI()
     {
+        // 지도가 열려 있으면 지도 쪽 표시와 헷갈리지 않도록 화면 적 표시는 숨김
+        if (showEnemyMarkers && !MapStrike.IsMapOpen) DrawEnemyMarkers();
         if (!showDebugHud) return;
         GUIStyle style = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold };
         style.normal.textColor = Color.white;
         string hp = playerHealth != null ? $"   HP {playerHealth.CurrHp:0}/{playerHealth.maxHp:0}" : "";
         string left = CurrentWave > 0 && !IsGameOver ? $"   남은 적 {EnemiesLeft}" : "";
         GUI.Label(new Rect(20, 20, 900, 40), statusText + left + hp, style);
-        DrawEnemyMarkers();
     }
 
     // 적 위치 표시: 화면 안이면 적 위에, 화면 밖이면 화면 가장자리에 방향과 거리를 표시

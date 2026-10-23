@@ -15,6 +15,7 @@ public class TankCamera : MonoBehaviour
     public float maxPitch = 40.0f;        // 아래를 내려다보는 한계
     public float followSmooth = 15.0f;    // 탱크 위치를 따라가는 부드러움
     public bool lockCursor = true;        // 마우스 커서 숨기기 (Esc로 해제, 클릭하면 다시 잠금)
+    public bool showDebugCrosshair = true; // 임시 조준점 표시 (직접 만든 조준선 UI가 생기면 끄기)
 
     [Header("정밀 조준 (우클릭 유지)")]
     public float normalFov = 60.0f;
@@ -152,7 +153,7 @@ public class TankCamera : MonoBehaviour
     // 임시 조준점 (직접 만든 UI가 생기면 지워도 됨)
     void OnGUI()
     {
-        if (Cursor.lockState != CursorLockMode.Locked) return;
+        if (!showDebugCrosshair || Cursor.lockState != CursorLockMode.Locked) return;
         float cx = Screen.width / 2.0f;
         float cy = Screen.height / 2.0f;
         GUIStyle style = new GUIStyle(GUI.skin.label) { fontSize = 28, alignment = TextAnchor.MiddleCenter };

@@ -19,6 +19,9 @@ public class MapStrike : MonoBehaviour
     [Header("지도")]
     public KeyCode mapKey = KeyCode.M;
     public Rect mapViewport = new Rect(0.2f, 0.14f, 0.6f, 0.78f); // 화면에서 지도가 차지하는 영역 (0~1)
+    public float minMapSize = 60.0f;   // 최대로 확대했을 때 지도 세로 절반 크기 (m)
+    public float zoomSpeed = 2.0f;     // 휠 한 칸당 확대 정도
+    public float dragThreshold = 8.0f; // 이 픽셀 이상 움직이면 클릭이 아니라 끌기로 판단
 
     // 다른 스크립트가 확인하는 상태 (지도 열림 / 포격 진행 중)
     public static bool IsMapOpen { get; private set; }
@@ -26,12 +29,20 @@ public class MapStrike : MonoBehaviour
     public static int ClosedFrame { get; private set; } = -1; // 지도를 닫은 프레임 (같은 프레임의 Esc를 카메라가 다시 처리하지 않도록)
 
     Camera mapCam;
+    Vector3 mapCenter;      // 맵 전체가 보이는 기본 카메라 위치
+    float fullMapSize;      // 맵 전체가 보이는 orthographicSize (가장 많이 축소한 상태)
+    bool pressing;          // 지도 위에서 왼쪽 버튼을 누르고 있는 중
+    bool dragging;          // 누른 채로 움직여서 지도를 끌고 있는 중
+    Vector3 pressPos;       // 누르기 시작한 화면 위치
+    Vector3 lastMousePos;   // 직전 프레임 마우스 위치
     Terrain terrain;
     FireCannon fire;
     TankCamera tankCam;
     TankHealth health;
     Vector3? selected;      // 지도에서 고른 목표 지점
     float cooldownLeft;
+    public float CooldownLeft => cooldownLeft;     // UI 표시용
+    public bool showDebugStatus = true;            // 오른쪽 아래 임시 상태 표시 (직접 만든 UI가 생기면 끄기)
     string message = "";
     float messageUntil;
 
@@ -78,8 +89,33 @@ public class MapStrike : MonoBehaviour
             center = terrain.transform.position + new Vector3(size.x * 0.5f, 0.0f, size.z * 0.5f);
             height = size.y + 300.0f;
         }
-        go.transform.SetPositionAndRotation(center + Vector3.up * height, Quaternion.Euler(90.0f, 0.0f, 0.0f));
+        mapCenter = center + Vector3.up * height;
+        go.transform.SetPositionAndRotation(mapCenter, Quaternion.Euler(90.0f, 0.0f, 0.0f));
         mapCam.farClipPlane = height + 500.0f;
+    }
+
+    // 마우스 휠로 확대·축소. 마우스가 가리키는 지점이 화면에서 그대로 유지되도록 카메라 위치를 보정
+    void ZoomMap(float scroll)
+    {
+        Vector3 before = mapCam.ScreenToWorldPoint(Input.mousePosition);
+        mapCam.orthographicSize = Mathf.Clamp(mapCam.orthographicSize * (1.0f - scroll * zoomSpeed), minMapSize, fullMapSize);
+        Vector3 after = mapCam.ScreenToWorldPoint(Input.mousePosition);
+
+        Vector3 pos = mapCam.transform.position + (before - after);
+        mapCam.transform.position = ClampToTerrain(pos);
+    }
+
+    // 확대한 상태에서 지도가 맵 밖을 비추지 않도록 카메라 위치 제한
+    Vector3 ClampToTerrain(Vector3 pos)
+    {
+        if (terrain == null) return pos;
+        Vector3 tMin = terrain.transform.position;
+        Vector3 tMax = tMin + terrain.terrainData.size;
+        float halfH = mapCam.orthographicSize;
+        float halfW = halfH * mapCam.aspect;
+        pos.x = halfW * 2.0f < tMax.x - tMin.x ? Mathf.Clamp(pos.x, tMin.x + halfW, tMax.x - halfW) : mapCenter.x;
+        pos.z = halfH * 2.0f < tMax.z - tMin.z ? Mathf.Clamp(pos.z, tMin.z + halfH, tMax.z - halfH) : mapCenter.z;
+        return pos;
     }
 
     void Update()
@@ -96,15 +132,49 @@ public class MapStrike : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Escape)) SetMapOpen(false);
 
-        // 지도 영역을 클릭하면, 지도 카메라 기준으로 Ray를 쏴서 지형(8번 레이어) 위치를 목표로 저장
-        if (Input.GetMouseButtonDown(0) && mapCam.pixelRect.Contains(Input.mousePosition))
+        // 지도 위에서 마우스 휠: 확대·축소
+        float scroll = Input.GetAxis("Mouse ScrollWheel");
+        if (scroll != 0.0f && mapCam.pixelRect.Contains(Input.mousePosition)) ZoomMap(scroll);
+
+        // 왼쪽 버튼: 짧게 클릭하면 목표 지정, 누른 채 끌면 지도 이동 (배틀그라운드 지도 방식)
+        Vector3 mouse = Input.mousePosition;
+        if (Input.GetMouseButtonDown(0) && mapCam.pixelRect.Contains(mouse))
         {
-            Ray ray = mapCam.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, 1 << 8))
-            {
-                selected = hit.point;
-            }
+            pressing = true;
+            dragging = false;
+            pressPos = mouse;
+            lastMousePos = mouse;
         }
+        if (pressing && Input.GetMouseButton(0))
+        {
+            // 일정 거리 이상 움직이면 클릭이 아니라 끌기로 판단
+            if (!dragging && Vector3.Distance(mouse, pressPos) > dragThreshold) dragging = true;
+            if (dragging) PanMap(lastMousePos, mouse);
+            lastMousePos = mouse;
+        }
+        if (pressing && Input.GetMouseButtonUp(0))
+        {
+            pressing = false;
+            if (!dragging) SelectTarget(mouse);
+        }
+    }
+
+    // 지도 클릭 위치에서 지도 카메라 기준으로 Ray를 쏴서 지형(8번 레이어) 위치를 목표로 저장
+    void SelectTarget(Vector3 screenPos)
+    {
+        Ray ray = mapCam.ScreenPointToRay(screenPos);
+        if (Physics.Raycast(ray, out RaycastHit hit, Mathf.Infinity, 1 << 8))
+        {
+            selected = hit.point;
+        }
+    }
+
+    // 마우스를 끈 만큼 지도를 반대로 이동 → 지도를 손으로 잡아 끄는 느낌
+    void PanMap(Vector3 fromScreen, Vector3 toScreen)
+    {
+        Vector3 from = mapCam.ScreenToWorldPoint(fromScreen);
+        Vector3 to = mapCam.ScreenToWorldPoint(toScreen);
+        mapCam.transform.position = ClampToTerrain(mapCam.transform.position + (from - to));
     }
 
     void SetMapOpen(bool open)
@@ -113,6 +183,8 @@ public class MapStrike : MonoBehaviour
         if (!open) ClosedFrame = Time.frameCount;
         mapCam.enabled = open;
         selected = null;
+        pressing = false;
+        dragging = false;
         if (tankCam != null) tankCam.SetCursorLock(!open); // 지도에서는 커서가 보여야 클릭 가능
 
         if (open && terrain != null)
@@ -120,7 +192,10 @@ public class MapStrike : MonoBehaviour
             // 지도 영역의 가로세로 비율에 맞춰 맵 전체가 들어오도록 확대 정도 계산
             Vector3 size = terrain.terrainData.size;
             float aspect = mapCam.pixelRect.width / mapCam.pixelRect.height;
-            mapCam.orthographicSize = Mathf.Max(size.z * 0.5f, size.x * 0.5f / aspect);
+            fullMapSize = Mathf.Max(size.z * 0.5f, size.x * 0.5f / aspect);
+            // 열 때마다 맵 전체가 보이는 상태로 초기화
+            mapCam.orthographicSize = fullMapSize;
+            mapCam.transform.position = mapCenter;
         }
     }
 
@@ -178,6 +253,7 @@ public class MapStrike : MonoBehaviour
 
         if (!IsMapOpen)
         {
+            if (!showDebugStatus) return;
             // 평소: 오른쪽 아래에 지도 포격 상태 표시
             style.alignment = TextAnchor.MiddleRight;
             string state = IsBusy ? "포격 중..." : cooldownLeft > 0.0f ? $"재사용 대기 {cooldownLeft:0}s" : "준비 완료";

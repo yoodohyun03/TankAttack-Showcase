@@ -28,6 +28,7 @@ public class FireCannon : MonoBehaviour
     public float damageMultiplier = 1.0f; // 공격력 아이템용
     public float normalSpread = 1.5f;     // 일반 조준 명중 오차 (도)
     public float precisionSpread = 0.2f;  // 정밀 조준 명중 오차 (도)
+    public bool showDebugHud = true;      // 임시 포탄·장전 표시 (직접 만든 UI가 생기면 끄기)
     AudioClip fireSfx = null;
     AudioSource sfx = null;
     TankCamera tankCam;
@@ -125,6 +126,7 @@ public class FireCannon : MonoBehaviour
     // 임시 화면 표시 (직접 만든 UI가 생기면 지워도 됨)
     void OnGUI()
     {
+        if (!showDebugHud) return;
         GUIStyle style = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold };
         float y = Screen.height - 50;
         for (int i = 0; i < shellTypes.Length; i++)
