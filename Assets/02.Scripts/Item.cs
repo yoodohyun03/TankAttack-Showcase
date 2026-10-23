@@ -9,16 +9,24 @@ public class Item : MonoBehaviour
     public float value = 80.0f;      // Heal: 회복량 / Speed, Attack: 배율 (1.5 = 1.5배)
     public float duration = 10.0f;   // Speed, Attack 지속 시간(초)
     public float lifeTime = 20.0f;   // 안 먹으면 사라지는 시간
+    public float bobHeight = 0.5f;   // 위아래로 움직이는 높이
+    public float bobSpeed = 2.0f;    // 움직이는 속도
+    float startY;                    // 처음 높이
 
     void Start()
     {
         Destroy(gameObject, lifeTime);
+        startY = transform.position.y;
     }
 
     void Update()
     {
         // 눈에 띄도록 제자리에서 회전
         transform.Rotate(0.0f, 90.0f * Time.deltaTime, 0.0f);
+        // 사인 곡선으로 위아래 왕복
+        Vector3 pos = transform.position;
+        pos.y = startY + Mathf.Sin(Time.time * bobSpeed) * bobHeight;
+        transform.position = pos;
     }
 
     void OnTriggerEnter(Collider other)
