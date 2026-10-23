@@ -179,6 +179,139 @@ public static class HudLayoutTool
         Debug.Log("보스전 바로가기 버튼 추가 완료. Ctrl+S로 씬을 저장하세요.");
     }
 
+    // 메뉴 [Tools > TankAttack > Add Tank Select Menu]
+    // scIntro를 연 상태에서 실행: "게임 시작"을 누르면 뜨는 전차 선택 화면(카드 3장, 설명, 출격·뒤로)을 만들고 연결
+    [MenuItem("Tools/TankAttack/Add Tank Select Menu")]
+    public static void AddTankSelectMenu()
+    {
+        Canvas canvas = Object.FindAnyObjectByType<Canvas>();
+        SceneLoader loader = Object.FindAnyObjectByType<SceneLoader>();
+        if (canvas == null || loader == null)
+        {
+            Debug.LogError("Canvas와 SceneLoader가 있는 scIntro를 열고 실행하세요.");
+            return;
+        }
+        canvasTr = canvas.transform;
+        font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        Sprite uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+
+        TankSelectMenu menu = canvas.GetComponent<TankSelectMenu>();
+        if (menu == null) menu = Undo.AddComponent<TankSelectMenu>(canvas.gameObject);
+
+        // 화면 전체를 덮는 선택 화면 (맨 위에 그려지도록 마지막 자식)
+        Image panel = GetImage("TankSelectPanel", canvasTr, Vector2.zero, Vector2.zero, Vector2.zero, new Color(0.03f, 0.05f, 0.08f, 0.9f), null);
+        Stretch(panel.rectTransform, 0);
+        panel.raycastTarget = true;
+        panel.transform.SetAsLastSibling();
+
+        Text title = GetText("TankSelectTitle", panel.transform, new Vector2(0.5f, 0.5f), new Vector2(0, 340), new Vector2(1000, 110), 80, true, TextAnchor.MiddleCenter, new Color(0.75f, 0.9f, 1f));
+        title.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        title.text = "전차 선택";
+        Text hint = GetText("TankSelectHint", panel.transform, new Vector2(0.5f, 0.5f), new Vector2(0, 260), new Vector2(1200, 40), 26, false, TextAnchor.MiddleCenter, new Color(1f, 1f, 1f, 0.8f));
+        hint.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        hint.text = "1 / 2 / 3 또는 클릭으로 선택  ·  Enter로 출격  ·  Esc로 뒤로";
+
+        // 전차 카드 3장 (글자는 실행할 때 TankSelectMenu가 TankSelection 값으로 채움)
+        Image[] cards = new Image[3];
+        Text[] cardTexts = new Text[3];
+        for (int i = 0; i < 3; i++)
+        {
+            Image card = GetImage($"TankCard{i + 1}", panel.transform, new Vector2(0.5f, 0.5f), new Vector2(-500 + i * 500, 40), new Vector2(440, 300), new Color(0.92f, 0.96f, 1f, 0.85f), uiSprite);
+            card.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            card.raycastTarget = true;
+            Button btn = card.GetComponent<Button>();
+            if (btn == null) btn = Undo.AddComponent<Button>(card.gameObject);
+            Undo.RecordObject(btn, "Add Tank Select Menu");
+            btn.targetGraphic = card;
+            for (int k = btn.onClick.GetPersistentEventCount() - 1; k >= 0; k--)
+            {
+                UnityEditor.Events.UnityEventTools.RemovePersistentListener(btn.onClick, k);
+            }
+            UnityEditor.Events.UnityEventTools.AddIntPersistentListener(btn.onClick, menu.Select, i);
+
+            Text t = GetText($"TankCard{i + 1}Label", card.transform, Vector2.zero, Vector2.zero, Vector2.zero, 28, false, TextAnchor.MiddleCenter, new Color(0.1f, 0.16f, 0.24f));
+            Stretch(t.rectTransform, 10);
+            t.supportRichText = true;
+            t.text = $"전차 {i + 1}";
+            Outline o = t.GetComponent<Outline>();
+            if (o != null) Undo.DestroyObjectImmediate(o);
+            cards[i] = card;
+            cardTexts[i] = t;
+        }
+
+        Text desc = GetText("TankSelectDesc", panel.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -190), new Vector2(1400, 90), 30, false, TextAnchor.MiddleCenter, Color.white);
+        desc.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+
+        AddMenuButton("TankBackBtn", "뒤로", panel.transform, new Vector2(-260, -330), uiSprite, menu.Close);
+        AddMenuButton("TankConfirmBtn", "출격!", panel.transform, new Vector2(260, -330), uiSprite, menu.Confirm);
+
+        // Intro의 "게임 시작" 버튼은 바로 시작하지 않고 전차 선택 화면을 열도록 변경
+        Transform start = FindDeep(canvasTr, "StartBtn");
+        if (start != null)
+        {
+            Button sb = start.GetComponent<Button>();
+            Undo.RecordObject(sb, "Add Tank Select Menu");
+            for (int k = sb.onClick.GetPersistentEventCount() - 1; k >= 0; k--)
+            {
+                UnityEditor.Events.UnityEventTools.RemovePersistentListener(sb.onClick, k);
+            }
+            UnityEditor.Events.UnityEventTools.AddPersistentListener(sb.onClick, menu.Open);
+        }
+        // Enter 키도 전차 선택 화면이 처리 (SceneLoader가 바로 시작하지 않도록)
+        Undo.RecordObject(loader, "Add Tank Select Menu");
+        loader.startWithEnterKey = false;
+
+        Undo.RecordObject(menu, "Add Tank Select Menu");
+        menu.panel = panel.gameObject;
+        menu.cards = cards;
+        menu.cardTexts = cardTexts;
+        menu.descriptionText = desc;
+        menu.loader = loader;
+        panel.gameObject.SetActive(false);
+
+        EditorSceneManager.MarkSceneDirty(canvas.gameObject.scene);
+        Debug.Log("전차 선택 화면 추가 완료. Ctrl+S로 씬을 저장하세요.");
+    }
+
+    // 메뉴 [Tools > TankAttack > Set Selected Image As Background]
+    // Project 창에서 스크린샷 이미지를 선택하고, 배경을 넣을 씬(scIntro / scWin / scLose)을 연 상태에서 실행
+    // → Canvas 맨 뒤에 화면을 꽉 채우는 배경 이미지로 넣음 (기존 반투명 패널과 글자는 그 위에 그대로)
+    [MenuItem("Tools/TankAttack/Set Selected Image As Background")]
+    public static void SetBackgroundImage()
+    {
+        Canvas canvas = Object.FindAnyObjectByType<Canvas>();
+        Object selected = Selection.activeObject;
+        string path = selected != null ? AssetDatabase.GetAssetPath(selected) : null;
+        if (canvas == null || string.IsNullOrEmpty(path) || !(selected is Texture2D || selected is Sprite))
+        {
+            Debug.LogError("Project 창에서 스크린샷 이미지를 선택하고, 배경을 넣을 씬을 연 상태에서 실행하세요.");
+            return;
+        }
+
+        // UI에 쓸 수 있도록 Sprite로 가져오기 설정
+        TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(path);
+        if (importer.textureType != TextureImporterType.Sprite || importer.spriteImportMode != SpriteImportMode.Single)
+        {
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.mipmapEnabled = false;
+            importer.SaveAndReimport();
+        }
+        Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+
+        canvasTr = canvas.transform;
+        Image bg = GetImage("ScreenshotBackground", canvasTr, Vector2.zero, Vector2.zero, Vector2.zero, Color.white, null);
+        Stretch(bg.rectTransform, 0);
+        bg.sprite = sprite;
+        bg.type = Image.Type.Simple;
+        bg.preserveAspect = false;
+        bg.raycastTarget = false;
+        bg.transform.SetAsFirstSibling(); // 맨 뒤 = 다른 UI보다 먼저 그려짐
+
+        EditorSceneManager.MarkSceneDirty(canvas.gameObject.scene);
+        Debug.Log($"배경 이미지 적용: {path}. Ctrl+S로 씬을 저장하세요.");
+    }
+
     // 메뉴 [Tools > TankAttack > Add Music Credit]
     // scIntro를 연 상태에서 실행: 왼쪽 아래에 배경음악 출처(CC BY 4.0 표기)를 작은 글씨로 추가
     [MenuItem("Tools/TankAttack/Add Music Credit")]

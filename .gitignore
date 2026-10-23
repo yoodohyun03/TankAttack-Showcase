@@ -63,3 +63,6 @@ mono_crash.*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# F12 스크린샷 저장 폴더 (배경으로 쓸 이미지만 Assets로 복사해서 사용)
+/Screenshots/

@@ -43,7 +43,7 @@ public class WaveManager : MonoBehaviour
     public float endSceneDelay = 2.0f;   // 승리/패배 후 엔딩 씬으로 넘어가기 전 대기
 
     [Header("난이도 조절")]
-    public float playerMaxHp = 300.0f;             // 시작 시 플레이어 최대 HP로 적용
+    public float playerMaxHp = 300.0f;             // (사용 안 함) 플레이어 HP는 이제 전차 종류(TankSelection)에서 정함
     [Range(0.0f, 1.0f)] public float healOnWaveClear = 0.3f; // 웨이브 클리어 시 최대 HP의 몇 %를 회복할지
     public float enemyDamageScale = 1.0f;          // 적 공격력 배율 (프리팹 수치에 곱함)
     public float enemyHpScale = 1.0f;              // 적 체력 배율
@@ -131,7 +131,8 @@ public class WaveManager : MonoBehaviour
         playerHealth = player.GetComponent<TankHealth>();
         if (playerHealth != null)
         {
-            playerHealth.SetMaxHp(playerMaxHp);
+            // Intro에서 고른 전차 종류의 능력치(HP, 속도, 공격력, 장전)와 색을 적용
+            TankSelection.ApplyTo(player.gameObject);
             playerHealth.OnDeath += HandlePlayerDied;
         }
 
@@ -412,6 +413,16 @@ public class WaveManager : MonoBehaviour
     //   F10: 즉시 승리 (5웨이브와 보스를 모두 깬 것으로 처리)   F9: 즉시 패배
     void Update()
     {
+        // F12: 스크린샷 저장 (Intro·엔딩 배경으로 쓸 실제 플레이 화면 찍기용, 승패가 정해진 뒤에도 동작)
+        // 에디터에서는 프로젝트 폴더의 Screenshots, 빌드에서는 실행 파일 옆 Screenshots 폴더에 저장
+        if (Input.GetKeyDown(KeyCode.F12))
+        {
+            System.IO.Directory.CreateDirectory("Screenshots");
+            string file = $"Screenshots/shot_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+            ScreenCapture.CaptureScreenshot(file);
+            Debug.Log($"스크린샷 저장: {file}");
+        }
+
         if (!enableCheatKeys || IsGameOver || PauseState.IsPaused) return;
 
         if (Input.GetKeyDown(KeyCode.F10))
@@ -451,9 +462,22 @@ public class WaveManager : MonoBehaviour
         StartCoroutine(LoadEndScene(win ? winSceneName : loseSceneName));
     }
 
+    // 전투가 끝난 순간의 실제 화면을 HUD 없이 찍어서 엔딩 씬으로 넘김 (EndingShot.Captured)
+    IEnumerator CaptureBattleView()
+    {
+        EndingShot.Capturing = true;                       // OnGUI 표시(적 위치, 지도 안내 등) 숨김
+        foreach (Canvas c in FindObjectsByType<Canvas>(FindObjectsSortMode.None)) c.enabled = false; // HUD 숨김
+        yield return null;                                 // 숨긴 상태로 한 프레임 그리기
+        yield return new WaitForEndOfFrame();              // 화면이 다 그려진 뒤에 찍어야 함
+        if (EndingShot.Captured != null) Destroy(EndingShot.Captured); // 이전 판의 화면 정리
+        EndingShot.Captured = ScreenCapture.CaptureScreenshotAsTexture();
+        EndingShot.Capturing = false;
+    }
+
     IEnumerator LoadEndScene(string sceneName)
     {
         yield return new WaitForSeconds(endSceneDelay);
+        yield return CaptureBattleView(); // 엔딩 씬 배경으로 쓸 마지막 전투 화면 찍기
         if (Application.CanStreamedLevelBeLoaded(sceneName))
         {
             SceneManager.LoadScene(sceneName);
@@ -467,6 +491,7 @@ public class WaveManager : MonoBehaviour
     // 임시 화면 표시. 직접 만든 UI가 완성되면 showDebugHud를 끄면 됨
     void OnGUI()
     {
+        if (EndingShot.Capturing) return; // 엔딩 배경을 찍는 순간에는 화면 표시를 숨김
         // 지도가 열려 있으면 지도 쪽 표시와 헷갈리지 않도록 화면 적 표시는 숨김
         if (showEnemyMarkers && !MapStrike.IsMapOpen) DrawEnemyMarkers();
         if (!showDebugHud) return;

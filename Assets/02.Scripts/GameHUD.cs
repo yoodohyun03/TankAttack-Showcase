@@ -87,7 +87,7 @@ public class GameHUD : MonoBehaviour
                 shellTexts[i].color = i == fire.CurrentIndex ? fire.shellTypes[i].trailColor : new Color(1, 1, 1, 0.45f);
             }
             // 장전 바: 장전이 끝나면 가득 참
-            if (reloadFill != null) reloadFill.fillAmount = 1.0f - fire.ReloadRemaining / fire.Current.reloadTime;
+            if (reloadFill != null) reloadFill.fillAmount = 1.0f - fire.ReloadRemaining / fire.CurrentReloadTime;
         }
 
         // 지도 포격

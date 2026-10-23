@@ -69,6 +69,11 @@
   - `SceneLoader`: 씬 전환 버튼, 보스전 바로가기 (사용자가 입력)
   - `GameHUD`: 게임 HUD와 보스 HP바
   - `PauseMenu`, `PauseState`: Esc 일시정지 메뉴(`Time.timeScale = 0`), 다른 스크립트가 일시정지 여부 확인
+  - `TankSelection`, `TankSelectMenu`: 플레이어 전차 3종(표준·경전차·중전차) 능력치와 Intro의 전차 선택 화면, `WaveManager`가 시작할 때 `ApplyTo`로 적용 (플레이어 HP도 여기서 정함)
+  - `TankPreview`: 전차 선택 카드의 3D 미리보기 (먼 곳(5000m)의 전차 모델 + 전용 카메라 + RenderTexture)
+  - `OrbitCamera`: Intro 배경 전장을 천천히 도는 카메라 / `EndingShot`: 엔딩 씬 배경 = 전투가 끝난 순간 HUD 없이 찍은 화면 (`WaveManager.CaptureBattleView`)
+  - F12: 스크린샷 저장 (`Screenshots/`, gitignore) → PPT용
+- 에디터 도구 `MenuSceneBuilder`: Build Intro Backdrop(전투 씬의 지형·기지·조명·안개·눈을 Intro로 복사), Add Tank Previews, Add Ending Battle Background
 - 에디터 도구 (`Assets/Editor`, 메뉴 `Tools > TankAttack`)
   - `EnemyPrefabBuilder`: 적 3종·보스·아군 프리팹 생성 (수치를 바꾸면 다시 실행)
   - `UrpParticleMaterialConverter`: URP 전용 폭발 머티리얼을 Built-in으로 변환

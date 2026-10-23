@@ -26,6 +26,9 @@ public class FireCannon : MonoBehaviour
     public GameObject cannon = null;
     public Transform firePos;
     public float damageMultiplier = 1.0f; // 공격력 아이템용
+    [HideInInspector] public float tankDamageScale = 1.0f; // 선택한 전차 종류의 공격력 배율 (TankSelection이 설정)
+    [HideInInspector] public float tankReloadScale = 1.0f; // 선택한 전차 종류의 재장전 시간 배율
+    public float CurrentReloadTime => Current.reloadTime * tankReloadScale; // HUD 장전바용
     public float normalSpread = 1.5f;     // 일반 조준 명중 오차 (도)
     public float precisionSpread = 0.2f;  // 정밀 조준 명중 오차 (도)
     public bool showDebugHud = true;      // 임시 포탄·장전 표시 (직접 만든 UI가 생기면 끄기)
@@ -76,7 +79,7 @@ public class FireCannon : MonoBehaviour
         if (index == CurrentIndex) return;
         CurrentIndex = index;
         // 포탄을 바꾸면 새 포탄을 장전해야 함
-        ReloadRemaining = Current.reloadTime;
+        ReloadRemaining = CurrentReloadTime;
         OnShellChanged?.Invoke(Current);
     }
 
@@ -86,7 +89,7 @@ public class FireCannon : MonoBehaviour
         float spread = (tankCam != null && tankCam.IsPrecision) ? precisionSpread : normalSpread;
         Quaternion offset = Quaternion.Euler(UnityEngine.Random.Range(-spread, spread), UnityEngine.Random.Range(-spread, spread), 0.0f);
         SpawnShell(firePos.rotation * offset, 3.0f);
-        ReloadRemaining = Current.reloadTime;
+        ReloadRemaining = CurrentReloadTime;
     }
 
     // 지도 포격용: 목표 지점에 떨어지도록 탄도를 계산해서 바로 발사 (재장전과 무관)
@@ -156,7 +159,7 @@ public class FireCannon : MonoBehaviour
 
         Cannon shell = obj.GetComponent<Cannon>();
         shell.owner = transform.root; // 자기 포탄에 맞지 않도록 발사한 탱크를 기록
-        shell.damage = type.damage * damageMultiplier;
+        shell.damage = type.damage * damageMultiplier * tankDamageScale;
         shell.splashRadius = type.splashRadius;
         shell.launchSpeed = speed > 0.0f ? speed : type.launchSpeed;
         shell.lifeTime = lifeTime;

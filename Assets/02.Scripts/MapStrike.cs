@@ -13,7 +13,7 @@ public class MapStrike : MonoBehaviour
     public float salvoInterval = 0.4f;  // 연발 간격 (초)
     public float scatterRadius = 5.0f;  // 목표 주변 흩어짐 반경 (m)
     public float maxRange = 450.0f;     // 최대 사거리 (m)
-    public float cooldown = 25.0f;      // 재사용 대기 (초)
+    public float cooldown = 10.0f;      // 재사용 대기 (초)
     public float aimTime = 1.2f;        // 포탑이 목표 쪽으로 도는 시간
 
     [Header("지도")]
@@ -264,6 +264,7 @@ public class MapStrike : MonoBehaviour
     // 임시 UI (직접 만든 UI가 생기면 교체)
     void OnGUI()
     {
+        if (EndingShot.Capturing) return; // 엔딩 배경을 찍는 순간에는 화면 표시를 숨김
         GUIStyle style = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         style.normal.textColor = Color.white;
 
