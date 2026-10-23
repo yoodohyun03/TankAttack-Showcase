@@ -105,6 +105,80 @@ public static class HudLayoutTool
         Debug.Log("HUD 배치 완료. Ctrl+S로 씬을 저장하세요.");
     }
 
+    // 메뉴 [Tools > TankAttack > Add Boss HP Bar]
+    // 직접 다듬은 기존 HUD 배치는 건드리지 않고, 보스 HP바만 화면 위쪽에 추가하고 GameHUD에 연결
+    [MenuItem("Tools/TankAttack/Add Boss HP Bar")]
+    public static void AddBossBar()
+    {
+        Canvas canvas = Object.FindAnyObjectByType<Canvas>();
+        GameHUD hud = canvas != null ? canvas.GetComponent<GameHUD>() : null;
+        if (hud == null)
+        {
+            Debug.LogError("GameHUD가 붙은 Canvas가 없습니다. scBattleField를 열고 실행하세요.");
+            return;
+        }
+        canvasTr = canvas.transform;
+        font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        Sprite uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+
+        RectTransform panel = GetOrCreate("BossPanel", canvasTr, false);
+        Place(panel, new Vector2(0.5f, 1), new Vector2(0, -110), new Vector2(820, 80));
+        Text name = GetText("BossName", panel, new Vector2(0.5f, 1), Vector2.zero, new Vector2(820, 36), 30, true, TextAnchor.UpperCenter, new Color(1f, 0.5f, 0.75f));
+        Image back = GetImage("BossBarBack", panel, new Vector2(0.5f, 0), Vector2.zero, new Vector2(820, 30), new Color(0, 0, 0, 0.6f), uiSprite);
+        Image fill = GetImage("BossFill", back.transform, Vector2.zero, Vector2.zero, Vector2.zero, new Color(0.9f, 0.15f, 0.45f), uiSprite);
+        Stretch(fill.rectTransform, 3);
+        MakeFilled(fill);
+
+        Undo.RecordObject(hud, "Add Boss HP Bar");
+        hud.bossPanel = panel.gameObject;
+        hud.bossFill = fill;
+        hud.bossText = name;
+        panel.gameObject.SetActive(false); // 보스가 등장할 때 GameHUD가 켬
+
+        EditorSceneManager.MarkSceneDirty(canvas.gameObject.scene);
+        Debug.Log("보스 HP바 추가 완료. Ctrl+S로 씬을 저장하세요.");
+    }
+
+    // 메뉴 [Tools > TankAttack > Add Boss Shortcut Button]
+    // scIntro를 연 상태에서 실행: 오른쪽 아래에 작은 "보스전 바로가기" 버튼을 만들고 SceneLoader.StartBossFight에 연결
+    [MenuItem("Tools/TankAttack/Add Boss Shortcut Button")]
+    public static void AddBossShortcut()
+    {
+        Canvas canvas = Object.FindAnyObjectByType<Canvas>();
+        SceneLoader loader = Object.FindAnyObjectByType<SceneLoader>();
+        if (canvas == null || loader == null)
+        {
+            Debug.LogError("Canvas와 SceneLoader가 있는 씬(scIntro)을 열고 실행하세요.");
+            return;
+        }
+        canvasTr = canvas.transform;
+        font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        Sprite uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+
+        // 버튼 본체 (오른쪽 아래, 작게)
+        Image img = GetImage("BossShortcutBtn", canvasTr, new Vector2(1, 0), new Vector2(-30, 30), new Vector2(260, 56), new Color(0.85f, 0.25f, 0.45f, 0.9f), uiSprite);
+        img.raycastTarget = true; // 클릭을 받아야 함
+        Button btn = img.GetComponent<Button>();
+        if (btn == null) btn = Undo.AddComponent<Button>(img.gameObject);
+        Undo.RecordObject(btn, "Add Boss Shortcut");
+        btn.targetGraphic = img;
+
+        // 기존 연결을 지우고 StartBossFight 하나만 연결
+        for (int i = btn.onClick.GetPersistentEventCount() - 1; i >= 0; i--)
+        {
+            UnityEditor.Events.UnityEventTools.RemovePersistentListener(btn.onClick, i);
+        }
+        UnityEditor.Events.UnityEventTools.AddPersistentListener(btn.onClick, loader.StartBossFight);
+
+        // 버튼 글자
+        Text label = GetText("BossShortcutLabel", img.transform, Vector2.zero, Vector2.zero, Vector2.zero, 22, true, TextAnchor.MiddleCenter, Color.white);
+        Stretch(label.rectTransform, 0);
+        label.text = "보스전 바로가기 ▶";
+
+        EditorSceneManager.MarkSceneDirty(canvas.gameObject.scene);
+        Debug.Log("보스전 바로가기 버튼 추가 완료. Ctrl+S로 씬을 저장하세요.");
+    }
+
     // 이름으로 찾고, 없으면 새로 만듦
     static RectTransform GetOrCreate(string name, Transform parent, bool _)
     {

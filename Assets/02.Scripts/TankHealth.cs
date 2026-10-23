@@ -4,6 +4,10 @@ using UnityEngine;
 // 탱크 체력 관리 (플레이어 탱크, 적 탱크 공용)
 public class TankHealth : MonoBehaviour
 {
+    // 진영: 플레이어와 아군 AI는 Player, 적은 Enemy. 같은 진영끼리는 포탄 데미지가 없음
+    public enum Team { Player, Enemy }
+    public Team team = Team.Player;
+
     public float maxHp = 100.0f;
     float currHp;
     bool isDead = false;

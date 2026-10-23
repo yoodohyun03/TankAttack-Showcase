@@ -4,12 +4,14 @@ using UnityEngine;
 
 // 메뉴 [Tools > TankAttack > Build Enemy Prefabs]를 누르면
 // 플레이어와 같은 Abrams 탱크 모델로 적 프리팹 3종을 자동 생성한다.
-// 결과: Assets/Resources/Enemies/Enemy_Scout, Enemy_Heavy, Enemy_Artillery
+// 결과: Assets/Resources/Enemies/Enemy_Scout, Enemy_Heavy, Enemy_Artillery, Enemy_Boss
+//       Assets/Resources/Allies/Ally_Tank
 public static class EnemyPrefabBuilder
 {
     const string SourcePrefab = "Assets/05.Models/Abrams_Tank/Prefab/Tank.prefab";
     const string OutDir = "Assets/Resources/Enemies";
     const string MatDir = "Assets/Resources/Enemies/Materials";
+    const string AllyDir = "Assets/Resources/Allies";
 
     struct Spec
     {
@@ -22,6 +24,7 @@ public static class EnemyPrefabBuilder
         public float attackRange, fireInterval, damage, launchSpeed, shellLifeTime, spread;
         public bool highArc;
         public float minPitch;
+        public bool isAlly;       // 아군 AI
     }
 
     [MenuItem("Tools/TankAttack/Build Enemy Prefabs")]
@@ -50,6 +53,14 @@ public static class EnemyPrefabBuilder
             new Spec { name = "Enemy_Artillery", type = EnemyTank.EnemyType.Artillery, tint = new Color(0.4f, 0.5f, 0.65f), scale = 1.0f,
                 hp = 90, moveSpeed = 8, turnSpeed = 45, stopDistance = 160, retreatDistance = 100,
                 attackRange = 260, fireInterval = 8.0f, damage = 20, launchSpeed = 55, shellLifeTime = 15, spread = 4.5f, highArc = true, minPitch = -75 },
+            // 보스: 매우 크고 단단함, 체력이 절반 아래면 광폭화 (EnemyTank.CheckEnrage)
+            new Spec { name = "Enemy_Boss", type = EnemyTank.EnemyType.Boss, tint = new Color(0.25f, 0.25f, 0.28f), scale = 2.0f,
+                hp = 1500, moveSpeed = 5, turnSpeed = 25, stopDistance = 60, retreatDistance = 0,
+                attackRange = 160, fireInterval = 4.0f, damage = 30, launchSpeed = 120, shellLifeTime = 3, spread = 2.0f, highArc = false, minPitch = -35 },
+            // 아군: 파란색, 적을 공격하고 적이 없으면 플레이어를 따라다님
+            new Spec { name = "Ally_Tank", type = EnemyTank.EnemyType.Ally, tint = new Color(0.35f, 0.6f, 1.0f), scale = 0.9f,
+                hp = 180, moveSpeed = 12, turnSpeed = 60, stopDistance = 45, retreatDistance = 0,
+                attackRange = 120, fireInterval = 3.0f, damage = 12, launchSpeed = 120, shellLifeTime = 3, spread = 3.0f, highArc = false, minPitch = -30, isAlly = true },
         };
 
         foreach (Spec spec in specs)
@@ -58,7 +69,7 @@ public static class EnemyPrefabBuilder
         }
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log($"적 프리팹 {specs.Length}종 생성 완료: {OutDir}");
+        Debug.Log($"AI 탱크 프리팹 {specs.Length}종 생성 완료 (적·보스: {OutDir}, 아군: {AllyDir})");
     }
 
     static void BuildOne(GameObject source, Spec spec)
@@ -95,10 +106,12 @@ public static class EnemyPrefabBuilder
         // 체력
         TankHealth health = go.AddComponent<TankHealth>();
         health.maxHp = spec.hp;
+        health.team = spec.isAlly ? TankHealth.Team.Player : TankHealth.Team.Enemy;
 
         // AI 스펙
         EnemyTank ai = go.AddComponent<EnemyTank>();
         ai.type = spec.type;
+        ai.isAlly = spec.isAlly;
         ai.moveSpeed = spec.moveSpeed;
         ai.turnSpeed = spec.turnSpeed;
         ai.stopDistance = spec.stopDistance;
@@ -140,7 +153,10 @@ public static class EnemyPrefabBuilder
             r.sharedMaterials = mats;
         }
 
-        PrefabUtility.SaveAsPrefabAsset(go, $"{OutDir}/{spec.name}.prefab");
+        // 아군은 Resources/Allies, 적과 보스는 Resources/Enemies
+        string outDir = spec.isAlly ? AllyDir : OutDir;
+        Directory.CreateDirectory(outDir);
+        PrefabUtility.SaveAsPrefabAsset(go, $"{outDir}/{spec.name}.prefab");
         Object.DestroyImmediate(go);
     }
 

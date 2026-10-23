@@ -66,13 +66,12 @@ public class Cannon : MonoBehaviour
         }
     }
 
-    // 적끼리 쏜 포탄은 서로 데미지를 주지 않음
+    // 같은 진영끼리 쏜 포탄은 데미지를 주지 않음 (적끼리, 플레이어와 아군끼리)
     bool IsFriendlyFire(TankHealth target)
     {
         if (owner == null) return false;
-        bool ownerIsEnemy = owner.GetComponent<EnemyTank>() != null;
-        bool targetIsEnemy = target.GetComponent<EnemyTank>() != null;
-        return ownerIsEnemy && targetIsEnemy;
+        TankHealth ownerHealth = owner.GetComponent<TankHealth>();
+        return ownerHealth != null && ownerHealth.team == target.team;
     }
 
     IEnumerator ExplosionCannon(float tm)

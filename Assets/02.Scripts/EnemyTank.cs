@@ -1,19 +1,25 @@
 using System;
+using System.Collections;
 using UnityEngine;
 
-// 적 AI 탱크: 플레이어를 추적하고, 사거리 안에 들어오면 탄도를 계산해서 포격한다.
-// 스펙(체력/속도/사거리/공격력 등)을 다르게 준 프리팹으로 적 종류를 나눈다.
+// AI 탱크: 가장 가까운 상대 진영 탱크를 추적하고, 사거리 안에 들어오면 탄도를 계산해서 포격한다.
+// - 적(isAlly = false): 플레이어와 아군 AI를 공격
+// - 아군(isAlly = true): 적을 공격하고, 적이 없으면 플레이어를 따라다님
+// - 보스: 체력이 절반 아래로 떨어지면 광폭화 (연사, 속도 증가)
+// 스펙(체력/속도/사거리/공격력 등)을 다르게 준 프리팹으로 종류를 나눈다.
 [RequireComponent(typeof(TankHealth))]
 public class EnemyTank : MonoBehaviour
 {
-    public enum EnemyType { Scout, Heavy, Artillery }
+    public enum EnemyType { Scout, Heavy, Artillery, Boss, Ally }
     public EnemyType type = EnemyType.Scout;
+    public bool isAlly = false;          // true면 플레이어 편
 
     [Header("이동")]
     public float moveSpeed = 10.0f;
     public float turnSpeed = 50.0f;      // 차체 회전 속도 (도/초)
     public float stopDistance = 40.0f;   // 이 거리 안이면 멈춰서 사격
     public float retreatDistance = 0.0f; // 이 거리보다 가까우면 후진 (0이면 사용 안 함)
+    public float followDistance = 30.0f; // 아군: 싸울 적이 없을 때 플레이어와 유지할 거리
 
     [Header("공격")]
     public float attackRange = 120.0f;
@@ -27,28 +33,39 @@ public class EnemyTank : MonoBehaviour
     public float minPitch = -45.0f;      // 포신 위쪽 한계 (음수가 위쪽)
     public float maxPitch = 5.0f;        // 포신 아래쪽 한계
 
+    [Header("보스 광폭화")]
+    [Range(0.0f, 1.0f)] public float enrageHpRatio = 0.5f; // 이 비율 아래로 체력이 떨어지면 광폭화
+    public int enragedBurst = 3;                           // 광폭화 후 한 번에 쏘는 발 수
+
     [Header("참조 (비워두면 이름으로 자동 검색)")]
     public Transform turret;
     public Transform cannon;
     public Transform firePos;
 
-    // 웨이브 매니저 등이 적 처치를 집계할 때 사용
+    // 웨이브 매니저 등이 적 처치를 집계할 때 사용 (아군이 죽을 때는 발생하지 않음)
     public static event Action<EnemyTank> OnEnemyDied;
+    public static EnemyTank CurrentBoss { get; private set; } // 보스 HP바 표시용
+
+    public TankHealth Health => health;
+    public bool IsEnraged { get; private set; }
 
     Transform tr;
-    Transform target;
+    Transform target;        // 현재 공격 목표 (없으면 null)
+    Transform player;        // 아군이 따라다닐 플레이어
     TankHealth health;
     GameObject shellPrefab;
     AudioSource sfx;
     AudioClip fireSfx;
     float fireTimer;
     float stuckTimer;
+    float retargetTimer;
     bool isDead = false;
 
     void Awake()
     {
         tr = transform;
         health = GetComponent<TankHealth>();
+        health.team = isAlly ? TankHealth.Team.Player : TankHealth.Team.Enemy;
         sfx = GetComponent<AudioSource>();
         shellPrefab = Resources.Load<GameObject>("Cannon");
         fireSfx = Resources.Load<AudioClip>("CannonFire");
@@ -61,25 +78,47 @@ public class EnemyTank : MonoBehaviour
     void Start()
     {
         GetComponent<Rigidbody>().centerOfMass = new Vector3(0.0f, -0.5f, 0.0f);
-        // 플레이어 탱크 = TankMove가 붙은 탱크
-        TankMove player = FindAnyObjectByType<TankMove>();
-        if (player != null) target = player.transform;
+        TankMove p = FindAnyObjectByType<TankMove>();
+        if (p != null) player = p.transform;
+        if (type == EnemyType.Boss) CurrentBoss = this;
 
         health.OnDeath += Die;
+        health.OnHpChanged += CheckEnrage;
         // 등장하자마자 일제히 쏘지 않도록 첫 발사 타이밍을 흩어 놓음
         fireTimer = UnityEngine.Random.Range(fireInterval * 0.5f, fireInterval);
+        FindTarget();
     }
 
     void OnDestroy()
     {
-        if (health != null) health.OnDeath -= Die;
+        if (health != null)
+        {
+            health.OnDeath -= Die;
+            health.OnHpChanged -= CheckEnrage;
+        }
+        if (CurrentBoss == this) CurrentBoss = null;
     }
 
     void Update()
     {
-        if (isDead || target == null) return;
+        if (isDead) return;
 
         CheckStuck();
+
+        // 1초마다 가장 가까운 상대 진영 탱크로 목표를 다시 고름
+        retargetTimer -= Time.deltaTime;
+        if (retargetTimer <= 0.0f || target == null || IsDeadTarget(target))
+        {
+            FindTarget();
+            retargetTimer = 1.0f;
+        }
+
+        if (target == null)
+        {
+            // 싸울 상대가 없을 때: 아군은 플레이어를 따라다님, 적은 대기
+            if (isAlly && player != null) MoveToward(player.position, followDistance);
+            return;
+        }
 
         float dist = Vector3.Distance(tr.position, target.position);
         Move(dist);
@@ -88,8 +127,52 @@ public class EnemyTank : MonoBehaviour
         fireTimer -= Time.deltaTime;
         if (aimed && inRange && dist <= attackRange && fireTimer <= 0.0f)
         {
-            Fire();
+            if (IsEnraged && enragedBurst > 1) StartCoroutine(Burst(enragedBurst));
+            else Fire();
             fireTimer = fireInterval;
+        }
+    }
+
+    // 살아 있는 상대 진영 탱크 중 가장 가까운 것을 목표로
+    void FindTarget()
+    {
+        target = null;
+        float best = float.MaxValue;
+        foreach (TankHealth h in FindObjectsByType<TankHealth>(FindObjectsSortMode.None))
+        {
+            if (h.IsDead || h.team == health.team) continue;
+            float d = (h.transform.position - tr.position).sqrMagnitude;
+            if (d < best)
+            {
+                best = d;
+                target = h.transform;
+            }
+        }
+    }
+
+    static bool IsDeadTarget(Transform t)
+    {
+        TankHealth h = t.GetComponent<TankHealth>();
+        return h == null || h.IsDead;
+    }
+
+    // 보스: 체력이 기준 아래로 떨어지면 한 번만 광폭화
+    void CheckEnrage(float curr, float max)
+    {
+        if (type != EnemyType.Boss || IsEnraged || curr > max * enrageHpRatio) return;
+        IsEnraged = true;
+        fireInterval *= 0.6f;
+        moveSpeed *= 1.4f;
+        turretTurnSpeed *= 1.5f;
+        Debug.Log($"{name}: 광폭화!");
+    }
+
+    IEnumerator Burst(int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            Fire();
+            yield return new WaitForSeconds(0.25f);
         }
     }
 
@@ -114,22 +197,28 @@ public class EnemyTank : MonoBehaviour
         }
     }
 
-    // 차체: 플레이어 쪽으로 돌면서 전진, 가까우면 정지(또는 후진)
+    // 차체: 목표 쪽으로 돌면서 전진, 가까우면 정지(또는 후진)
     void Move(float dist)
     {
-        Vector3 toTarget = target.position - tr.position;
-        toTarget.y = 0.0f;
-        Quaternion look = Quaternion.LookRotation(toTarget);
-        tr.rotation = Quaternion.RotateTowards(tr.rotation, look, turnSpeed * Time.deltaTime);
-
-        float facing = Vector3.Angle(tr.forward, toTarget);
-        if (dist > stopDistance && facing < 45.0f)
-        {
-            tr.Translate(Vector3.forward * moveSpeed * Time.deltaTime);
-        }
-        else if (retreatDistance > 0.0f && dist < retreatDistance)
+        MoveToward(target.position, stopDistance);
+        if (retreatDistance > 0.0f && dist < retreatDistance)
         {
             tr.Translate(Vector3.back * moveSpeed * 0.6f * Time.deltaTime);
+        }
+    }
+
+    // 지점 쪽으로 차체를 돌리고, stop 거리보다 멀면 전진
+    void MoveToward(Vector3 point, float stop)
+    {
+        Vector3 to = point - tr.position;
+        to.y = 0.0f;
+        if (to.sqrMagnitude < 0.01f) return;
+        tr.rotation = Quaternion.RotateTowards(tr.rotation, Quaternion.LookRotation(to), turnSpeed * Time.deltaTime);
+
+        float facing = Vector3.Angle(tr.forward, to);
+        if (to.magnitude > stop && facing < 45.0f)
+        {
+            tr.Translate(Vector3.forward * moveSpeed * Time.deltaTime);
         }
     }
 
@@ -159,6 +248,7 @@ public class EnemyTank : MonoBehaviour
 
     void Fire()
     {
+        if (isDead) return;
         // 명중 오차: 발사 방향을 spread 범위 안에서 무작위로 살짝 비틈
         Quaternion offset = Quaternion.Euler(UnityEngine.Random.Range(-spread, spread), UnityEngine.Random.Range(-spread, spread), 0.0f);
         GameObject obj = Instantiate(shellPrefab, firePos.position, firePos.rotation * offset);
@@ -174,7 +264,8 @@ public class EnemyTank : MonoBehaviour
     void Die()
     {
         isDead = true;
-        OnEnemyDied?.Invoke(this);
+        if (!isAlly) OnEnemyDied?.Invoke(this);
+        if (CurrentBoss == this) CurrentBoss = null;
 
         // 파괴 연출: 검게 그을리게 하고 잠시 뒤 제거
         foreach (Renderer r in GetComponentsInChildren<Renderer>())

@@ -25,6 +25,13 @@ public class SceneLoader : MonoBehaviour
     {
         SceneManager.LoadScene("scBattleField");
     }
+    // 보스전 바로가기: 마지막(보스) 웨이브부터 게임 시작 (채점·시연용)
+    public void StartBossFight()
+    {
+        WaveManager.SkipToLastWave = true;
+        StartGame();
+    }
+
     public void GoToIntro()
     {
         SceneManager.LoadScene("scIntro");

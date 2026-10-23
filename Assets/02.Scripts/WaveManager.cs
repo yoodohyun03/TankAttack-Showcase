@@ -29,6 +29,11 @@ public class WaveManager : MonoBehaviour
         new Wave { scout = 5, heavy = 3, artillery = 3, spawnInterval = 1.0f },
     };
 
+    [Header("보스 · 아군")]
+    public bool bossOnLastWave = true;   // 마지막 웨이브 끝에 보스 등장
+    public int allyCount = 2;            // 함께 싸우는 아군 AI 수
+    public bool reinforceAllies = true;  // 웨이브 클리어 때마다 파괴된 아군을 다시 채움(증원)
+
     [Header("진행")]
     public float firstWaveDelay = 3.0f;  // 게임 시작 후 첫 웨이브까지 대기
     public float breakTime = 5.0f;       // 웨이브 사이 휴식 시간
@@ -63,6 +68,9 @@ public class WaveManager : MonoBehaviour
     public event Action<float> OnBreakStarted;       // 휴식 시간(초)
     public event Action<bool> OnGameEnded;           // true: 승리, false: 패배
 
+    // Intro의 "보스전 바로가기" 버튼이 켬 → 이번 판은 마지막(보스) 웨이브부터 시작 (한 번 쓰면 자동으로 꺼짐)
+    public static bool SkipToLastWave = false;
+
     public int CurrentWave { get; private set; }     // 1부터 시작, 0이면 시작 전
     public int EnemiesLeft { get; private set; }
     public bool IsGameOver { get; private set; }
@@ -73,12 +81,16 @@ public class WaveManager : MonoBehaviour
     readonly Dictionary<EnemyTank.EnemyType, GameObject> prefabs = new Dictionary<EnemyTank.EnemyType, GameObject>();
     string statusText = "";
     readonly List<EnemyTank> aliveEnemies = new List<EnemyTank>();
+    readonly List<EnemyTank> allies = new List<EnemyTank>();
+    GameObject allyPrefab;
 
     void Awake()
     {
         prefabs[EnemyTank.EnemyType.Scout] = Resources.Load<GameObject>("Enemies/Enemy_Scout");
         prefabs[EnemyTank.EnemyType.Heavy] = Resources.Load<GameObject>("Enemies/Enemy_Heavy");
         prefabs[EnemyTank.EnemyType.Artillery] = Resources.Load<GameObject>("Enemies/Enemy_Artillery");
+        prefabs[EnemyTank.EnemyType.Boss] = Resources.Load<GameObject>("Enemies/Enemy_Boss");
+        allyPrefab = Resources.Load<GameObject>("Allies/Ally_Tank");
         terrain = Terrain.activeTerrain;
     }
 
@@ -109,19 +121,51 @@ public class WaveManager : MonoBehaviour
             playerHealth.OnDeath += HandlePlayerDied;
         }
 
+        SpawnAllies();
         StartCoroutine(RunWaves());
+    }
+
+    // 아군 AI를 플레이어 근처에 allyCount만큼 채움 (이미 살아 있는 아군은 그대로)
+    void SpawnAllies()
+    {
+        if (allyPrefab == null) return;
+        allies.RemoveAll(a => a == null || a.Health.IsDead);
+        int need = allyCount - allies.Count;
+        for (int n = 0; n < need; n++)
+        {
+            // 플레이어 양옆 뒤쪽 30~40m
+            float side = (n % 2 == 0) ? 1.0f : -1.0f;
+            Vector3 offset = (player.right * side * 30.0f) - player.forward * (20.0f + n * 10.0f);
+            Vector3 pos = player.position + offset;
+            if (terrain != null) pos = GroundAt(pos);
+            GameObject obj = Instantiate(allyPrefab, pos, player.rotation);
+            allies.Add(obj.GetComponent<EnemyTank>());
+        }
+        if (need > 0 && CurrentWave > 0) Debug.Log($"아군 증원 {need}대");
     }
 
     IEnumerator RunWaves()
     {
-        statusText = "곧 적이 몰려옵니다!";
+        int startIndex = 0;
+        if (SkipToLastWave)
+        {
+            // 보스전 바로가기: 마지막 웨이브부터 (다음 판에는 처음부터 하도록 바로 끔)
+            SkipToLastWave = false;
+            startIndex = waves.Count - 1;
+            statusText = "보스전 바로 시작!";
+        }
+        else
+        {
+            statusText = "곧 적이 몰려옵니다!";
+        }
         yield return new WaitForSeconds(firstWaveDelay);
 
-        for (int i = 0; i < waves.Count; i++)
+        for (int i = startIndex; i < waves.Count; i++)
         {
             CurrentWave = i + 1;
             Wave wave = waves[i];
-            EnemiesLeft = wave.scout + wave.heavy + wave.artillery;
+            bool bossWave = bossOnLastWave && i == waves.Count - 1 && prefabs[EnemyTank.EnemyType.Boss] != null;
+            EnemiesLeft = wave.scout + wave.heavy + wave.artillery + (bossWave ? 1 : 0);
             statusText = $"WAVE {CurrentWave} / {waves.Count}";
             OnWaveStarted?.Invoke(CurrentWave, waves.Count);
             OnEnemiesLeftChanged?.Invoke(EnemiesLeft);
@@ -135,6 +179,14 @@ public class WaveManager : MonoBehaviour
                 yield return new WaitForSeconds(wave.spawnInterval);
             }
 
+            // 마지막 웨이브: 일반 적을 다 소환한 뒤 보스 등장
+            if (bossWave && !IsGameOver)
+            {
+                yield return new WaitForSeconds(2.0f);
+                statusText = "⚠ 보스 전차 등장! ⚠";
+                Spawn(EnemyTank.EnemyType.Boss);
+            }
+
             // 이번 웨이브의 적이 모두 처치될 때까지 대기
             yield return new WaitUntil(() => EnemiesLeft <= 0 || IsGameOver);
             if (IsGameOver) yield break;
@@ -143,6 +195,7 @@ public class WaveManager : MonoBehaviour
             {
                 // 웨이브 클리어 보상: 체력 일부 회복
                 if (playerHealth != null) playerHealth.Heal(playerHealth.maxHp * healOnWaveClear);
+                if (reinforceAllies) SpawnAllies();
                 statusText = $"WAVE {CurrentWave} 클리어! HP 회복, 다음 웨이브 준비";
                 OnBreakStarted?.Invoke(breakTime);
                 yield return new WaitForSeconds(breakTime);
@@ -284,35 +337,49 @@ public class WaveManager : MonoBehaviour
     }
 
     // 적 위치 표시: 화면 안이면 적 위에, 화면 밖이면 화면 가장자리에 방향과 거리를 표시
+    // 아군은 화면 안에 있을 때만 파란색으로 표시
     void DrawEnemyMarkers()
     {
         Camera cam = Camera.main;
         if (cam == null || player == null) return;
-        GUIStyle style = new GUIStyle(GUI.skin.label) { fontSize = 16, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-        style.normal.textColor = new Color(1.0f, 0.3f, 0.25f);
-        const float edge = 40.0f;
 
         foreach (EnemyTank enemy in aliveEnemies)
         {
             if (enemy == null) continue;
-            Vector3 sp = cam.WorldToScreenPoint(enemy.transform.position + Vector3.up * 6.0f);
-            Vector2 center = new Vector2(Screen.width, Screen.height) * 0.5f;
-            Vector2 p = new Vector2(sp.x, sp.y);
-            bool behind = sp.z < 0.0f;
-            if (behind) p = center - (p - center); // 카메라 뒤에 있으면 좌표가 뒤집혀 나오므로 되돌림
-            bool onScreen = !behind && p.x > 0 && p.x < Screen.width && p.y > 0 && p.y < Screen.height;
-            if (!onScreen)
-            {
-                // 화면 밖: 화면 중앙에서 적 방향으로 쭉 뻗어 가장자리에 붙임
-                Vector2 dir = (p - center).normalized;
-                if (behind && dir.sqrMagnitude < 0.01f) dir = Vector2.down;
-                p = center + dir * Mathf.Max(Screen.width, Screen.height);
-            }
-            float x = Mathf.Clamp(p.x, edge, Screen.width - edge);
-            float y = Mathf.Clamp(Screen.height - p.y, edge, Screen.height - edge); // GUI는 y축이 위에서 아래로
-            float dist = Vector3.Distance(player.position, enemy.transform.position);
-            string label = (onScreen ? "▼" : "◆") + $"\n{dist:0}m";
-            GUI.Label(new Rect(x - 40, y - 20, 80, 40), label, style);
+            bool boss = enemy.type == EnemyTank.EnemyType.Boss;
+            DrawMarker(cam, enemy.transform, boss ? new Color(1.0f, 0.15f, 0.6f) : new Color(1.0f, 0.3f, 0.25f), boss ? "BOSS" : "", true, boss ? 20 : 16);
         }
+        foreach (EnemyTank ally in allies)
+        {
+            if (ally == null || ally.Health.IsDead) continue;
+            DrawMarker(cam, ally.transform, new Color(0.4f, 0.75f, 1.0f), "아군", false, 14);
+        }
+    }
+
+    void DrawMarker(Camera cam, Transform t, Color color, string tag, bool showOffScreen, int fontSize)
+    {
+        const float edge = 40.0f;
+        Vector3 sp = cam.WorldToScreenPoint(t.position + Vector3.up * 6.0f);
+        Vector2 center = new Vector2(Screen.width, Screen.height) * 0.5f;
+        Vector2 p = new Vector2(sp.x, sp.y);
+        bool behind = sp.z < 0.0f;
+        if (behind) p = center - (p - center); // 카메라 뒤에 있으면 좌표가 뒤집혀 나오므로 되돌림
+        bool onScreen = !behind && p.x > 0 && p.x < Screen.width && p.y > 0 && p.y < Screen.height;
+        if (!onScreen)
+        {
+            if (!showOffScreen) return;
+            // 화면 밖: 화면 중앙에서 대상 방향으로 쭉 뻗어 가장자리에 붙임
+            Vector2 dir = (p - center).normalized;
+            if (behind && dir.sqrMagnitude < 0.01f) dir = Vector2.down;
+            p = center + dir * Mathf.Max(Screen.width, Screen.height);
+        }
+        float x = Mathf.Clamp(p.x, edge, Screen.width - edge);
+        float y = Mathf.Clamp(Screen.height - p.y, edge, Screen.height - edge); // GUI는 y축이 위에서 아래로
+        float dist = Vector3.Distance(player.position, t.position);
+
+        GUIStyle style = new GUIStyle(GUI.skin.label) { fontSize = fontSize, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        style.normal.textColor = color;
+        string head = string.IsNullOrEmpty(tag) ? (onScreen ? "▼" : "◆") : (onScreen ? $"▼ {tag}" : $"◆ {tag}");
+        GUI.Label(new Rect(x - 60, y - 22, 120, 44), $"{head}\n{dist:0}m", style);
     }
 }

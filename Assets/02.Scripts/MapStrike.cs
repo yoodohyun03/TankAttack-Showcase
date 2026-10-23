@@ -267,9 +267,12 @@ public class MapStrike : MonoBehaviour
 
         // 내 탱크와 적 위치 표시
         DrawMarker(transform.position, "▲\n나", new Color(0.4f, 0.8f, 1.0f));
-        foreach (EnemyTank enemy in FindObjectsByType<EnemyTank>(FindObjectsSortMode.None))
+        foreach (EnemyTank ai in FindObjectsByType<EnemyTank>(FindObjectsSortMode.None))
         {
-            DrawMarker(enemy.transform.position, "◆", new Color(1.0f, 0.3f, 0.25f));
+            if (ai.Health.IsDead) continue;
+            if (ai.isAlly) DrawMarker(ai.transform.position, "●", new Color(0.4f, 0.75f, 1.0f));
+            else if (ai.type == EnemyTank.EnemyType.Boss) DrawMarker(ai.transform.position, "★\nBOSS", new Color(1.0f, 0.15f, 0.6f));
+            else DrawMarker(ai.transform.position, "◆", new Color(1.0f, 0.3f, 0.25f));
         }
 
         // 아래쪽: 목표 정보와 포격 버튼

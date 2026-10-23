@@ -20,6 +20,11 @@ public class GameHUD : MonoBehaviour
     [Header("지도 포격")]
     public Text strikeText;
 
+    [Header("보스")]
+    public GameObject bossPanel;     // 보스가 있을 때만 표시
+    public Image bossFill;           // Image Type: Filled
+    public Text bossText;
+
     [Header("조준")]
     public GameObject crosshair;     // 일반 조준점
     public GameObject scopeOverlay;  // 정밀 조준 화면
@@ -91,6 +96,16 @@ public class GameHUD : MonoBehaviour
             if (MapStrike.IsBusy) strikeText.text = "[M] 지도 포격: 포격 중";
             else if (strike.CooldownLeft > 0.0f) strikeText.text = $"[M] 지도 포격: {strike.CooldownLeft:0}초";
             else strikeText.text = "[M] 지도 포격: 준비 완료";
+        }
+
+        // 보스 HP바: 보스가 살아 있을 때만 화면 위쪽에 표시
+        EnemyTank boss = EnemyTank.CurrentBoss;
+        bool showBoss = boss != null && !boss.Health.IsDead;
+        if (bossPanel != null) bossPanel.SetActive(showBoss);
+        if (showBoss)
+        {
+            if (bossFill != null) bossFill.fillAmount = boss.Health.CurrHp / boss.Health.maxHp;
+            if (bossText != null) bossText.text = boss.IsEnraged ? "보스 전차  -  광폭화!" : "보스 전차";
         }
 
         // 조준: 정밀 조준이면 조준경 화면, 아니면 일반 조준점 (지도가 열려 있으면 둘 다 숨김)
