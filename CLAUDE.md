@@ -5,7 +5,11 @@
 - **싱글 모드, Photon 사용 안 함.** 플레이어 vs 적 AI 탱크
 - 네트워크(Photon) 버전은 기말고사용으로 `C:\GitHub\TankAttack-Photon`에서 따로 진행. 이 프로젝트에 네트워크 코드를 섞지 말 것
 - Unity 6.5 (6000.5.10f1), 에셋 직렬화 Force Text
-- GitHub: https://github.com/yoodohyun03/TankAttack (private)
+- GitHub: https://github.com/yoodohyun03/TankAttack (private, 실제 작업용)
+- 공개 열람용: https://github.com/yoodohyun03/TankAttack-Showcase (public)
+  - 이 저장소의 기록에서 `Assets/02.Scripts`, `Assets/Editor`, `Docs`, `CLAUDE.md`, `.gitignore`만 남기고(`git filter-branch`), 커밋 메시지를 한국어로 옮긴 복사본 + README
+  - Asset Store 에셋, 수업 예제 원본, Photon 설정은 라이선스·보안상 절대 올리지 말 것
+  - 자동으로 동기화되지 않음 → 제출 전에 코드나 문서가 바뀌면 쇼케이스도 갱신 필요
 
 ## 마감 · 제출 (2026-10-25)
 1. 게임 실행파일 .zip → 교수님 이메일
