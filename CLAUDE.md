@@ -65,7 +65,7 @@
   - `TankHealth`: 체력 공용 컴포넌트, 진영(`Team`), `OnHpChanged`/`OnDeath`, 파괴 폭발
   - `EnemyTank`: 적·아군·보스 공용 AI(가장 가까운 상대 진영 추적, 탄도 조준, 보스 광폭화, 물리 이동, 장애물 회피, 끼임 탈출, 뒤집힘 복구), `OnEnemyDied`, `CurrentBoss`
   - `Ballistics`: 발사 각도 계산(적 AI, 정밀 조준, 지도 포격 공용)
-  - `WaveManager`: 5웨이브, 마지막 보스, 아군 소환·증원, 소환 위치 검사, 승패 판정, 적 위치 표시, `SkipToLastWave`(보스전 바로가기), 채점용 단축키(F10 즉시 승리, F9 즉시 패배), 자주포 산 중턱 고정 배치(`TryGetHillSpawnPosition`, `EnemyTank.stationary`)
+  - `WaveManager`: 5웨이브, 마지막 보스, 아군 소환·증원, 소환 위치 검사, 승패 판정, 적 위치 표시, `SkipToLastWave`(보스전 바로가기), 빠른 확인 단축키(F10 즉시 승리, F9 즉시 패배), 자주포 산 중턱 고정 배치(`TryGetHillSpawnPosition`, `EnemyTank.stationary`)
   - `MapStrike`: M키 전술 지도(확대·이동), 목표 지정, 4연발 포격, 쿨타임
   - `Item`, `ItemDropper`: 아이템 3종과 드롭 (사용자가 입력)
   - `SceneLoader`: 씬 전환 버튼, 보스전 바로가기 (사용자가 입력)

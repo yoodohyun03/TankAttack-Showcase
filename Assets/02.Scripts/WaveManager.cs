@@ -34,7 +34,7 @@ public class WaveManager : MonoBehaviour
     public int allyCount = 2;            // 함께 싸우는 아군 AI 수
     public bool reinforceAllies = true;  // 웨이브 클리어 때마다 파괴된 아군을 다시 채움(증원)
 
-    [Header("채점용 단축키 (F10: 즉시 승리, F9: 즉시 패배)")]
+    [Header("빠른 확인 단축키 (F10: 즉시 승리, F9: 즉시 패배)")]
     public bool enableCheatKeys = true;
 
     [Header("진행")]
@@ -409,7 +409,7 @@ public class WaveManager : MonoBehaviour
         OnEnemiesLeftChanged?.Invoke(EnemiesLeft);
     }
 
-    // 채점·확인용 단축키: 플레이 도중 바로 엔딩으로 (Intro에는 표시하지 않고 기획서·README에만 안내)
+    // 빠른 확인 단축키: 플레이 도중 바로 엔딩으로 (Intro에는 표시하지 않고 기획서·README에만 안내)
     //   F10: 즉시 승리 (5웨이브와 보스를 모두 깬 것으로 처리)   F9: 즉시 패배
     void Update()
     {
@@ -427,13 +427,13 @@ public class WaveManager : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.F10))
         {
-            Debug.Log("채점용 단축키: 즉시 승리");
+            Debug.Log("빠른 확인 단축키: 즉시 승리");
             KillAllEnemies();
             EndGame(true);
         }
         else if (Input.GetKeyDown(KeyCode.F9))
         {
-            Debug.Log("채점용 단축키: 즉시 패배");
+            Debug.Log("빠른 확인 단축키: 즉시 패배");
             EndGame(false);
         }
     }

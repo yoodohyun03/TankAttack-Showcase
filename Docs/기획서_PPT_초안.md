@@ -223,8 +223,8 @@ if (Ballistics.IsTrajectoryClear(origin, dir * lobSpeed, target, self))
 - 기능마다 직접/AI 구분을 구현노트에 기록, Git으로 기능 단위 관리
 - (`Docs/AI활용.md`에서 골라 쓰기)
 
-## 슬라이드 20. 채점 안내 · 크레딧 · 개발 기록
-**채점 안내**: Intro "보스전 바로가기" / 플레이 중 F10 즉시 승리, F9 즉시 패배 / Esc 일시정지
+## 슬라이드 20. 빠른 확인 기능 · 크레딧 · 개발 기록
+**빠른 확인 기능**: Intro "보스전 바로가기" / 플레이 중 F10 즉시 승리, F9 즉시 패배 / Esc 일시정지
 
 **크레딧**
 - 배경음악: "Clash Defiant" Kevin MacLeod (incompetech.com), Licensed under Creative Commons: By Attribution 4.0 License
