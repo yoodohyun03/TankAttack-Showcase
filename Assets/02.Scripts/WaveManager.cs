@@ -133,11 +133,17 @@ public class WaveManager : MonoBehaviour
         int need = allyCount - allies.Count;
         for (int n = 0; n < need; n++)
         {
-            // 플레이어 양옆 뒤쪽 30~40m
+            // 플레이어 양옆 30m 근처, 건물과 겹치면 플레이어 주위를 돌면서 빈자리를 찾음
             float side = (n % 2 == 0) ? 1.0f : -1.0f;
-            Vector3 offset = (player.right * side * 30.0f) - player.forward * (20.0f + n * 10.0f);
-            Vector3 pos = player.position + offset;
-            if (terrain != null) pos = GroundAt(pos);
+            Vector3 baseOffset = (player.right * side * 30.0f) - player.forward * (10.0f + n * 10.0f);
+            Vector3 pos = player.position + baseOffset;
+            for (int t = 0; t < 12; t++)
+            {
+                Vector3 offset = Quaternion.Euler(0.0f, t * 30.0f * side, 0.0f) * baseOffset;
+                pos = player.position + offset;
+                if (terrain != null) pos = GroundAt(pos);
+                if (IsFreeOfBuildings(pos)) break;
+            }
             GameObject obj = Instantiate(allyPrefab, pos, player.rotation);
             allies.Add(obj.GetComponent<EnemyTank>());
         }
@@ -278,6 +284,18 @@ public class WaveManager : MonoBehaviour
 
         ground = GroundAt(pos);
         if (Mathf.Abs(ground.y - player.position.y) > maxSpawnHeightDiff) return false;
+        if (!IsFreeOfBuildings(ground)) return false;
+        return true;
+    }
+
+    // 소환 위치 주변에 건물 같은 장애물이 없는지 (겹쳐서 소환되면 물리 엔진이 강하게 밀어내 튕겨 나감)
+    bool IsFreeOfBuildings(Vector3 pos)
+    {
+        Collider[] cols = Physics.OverlapSphere(pos + Vector3.up * 3.0f, 12.0f, ~(1 << 8), QueryTriggerInteraction.Ignore);
+        foreach (Collider c in cols)
+        {
+            if (c.GetComponentInParent<TankHealth>() == null) return false;
+        }
         return true;
     }
 

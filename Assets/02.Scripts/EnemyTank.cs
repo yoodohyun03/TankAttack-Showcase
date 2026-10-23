@@ -59,6 +59,14 @@ public class EnemyTank : MonoBehaviour
     float fireTimer;
     float stuckTimer;
     float retargetTimer;
+
+    // 물리 이동 (Update에서 정하고 FixedUpdate에서 적용)
+    public float lookAhead = 25.0f;      // 장애물 감지 거리
+    Rigidbody rb;
+    float desiredSpeed;                  // 이번 프레임에 원하는 전진(+)/후진(-) 속도
+    Quaternion desiredRotation;          // 이번 프레임에 향하고 싶은 방향
+    Vector3 lastCheckPos;
+    float blockedCheckTimer, blockedTime, escapeTimer, escapeTurn;
     bool isDead = false;
 
     void Awake()
@@ -77,7 +85,13 @@ public class EnemyTank : MonoBehaviour
 
     void Start()
     {
-        GetComponent<Rigidbody>().centerOfMass = new Vector3(0.0f, -0.5f, 0.0f);
+        rb = GetComponent<Rigidbody>();
+        rb.centerOfMass = new Vector3(0.0f, -0.5f, 0.0f);
+        rb.maxDepenetrationVelocity = 2.0f; // 겹쳤을 때 하늘로 튀어 오르지 않게
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic; // 빠르게 부딪혀도 얇은 벽을 뚫지 않게
+        desiredRotation = rb.rotation;
+        lastCheckPos = tr.position;
         TankMove p = FindAnyObjectByType<TankMove>();
         if (p != null) player = p.transform;
         if (type == EnemyType.Boss) CurrentBoss = this;
@@ -104,6 +118,10 @@ public class EnemyTank : MonoBehaviour
         if (isDead) return;
 
         CheckStuck();
+
+        // 이번 프레임의 이동 명령 초기화 (아래 Move/MoveToward가 정함, 없으면 제자리)
+        desiredSpeed = 0.0f;
+        desiredRotation = rb.rotation;
 
         // 1초마다 가장 가까운 상대 진영 탱크로 목표를 다시 고름
         retargetTimer -= Time.deltaTime;
@@ -203,23 +221,92 @@ public class EnemyTank : MonoBehaviour
         MoveToward(target.position, stopDistance);
         if (retreatDistance > 0.0f && dist < retreatDistance)
         {
-            tr.Translate(Vector3.back * moveSpeed * 0.6f * Time.deltaTime);
+            desiredSpeed = -moveSpeed * 0.6f;
         }
     }
 
-    // 지점 쪽으로 차체를 돌리고, stop 거리보다 멀면 전진
+    // 지점 쪽으로 차체를 돌리고, stop 거리보다 멀면 전진 (실제 이동은 FixedUpdate에서 물리로 처리)
     void MoveToward(Vector3 point, float stop)
     {
         Vector3 to = point - tr.position;
         to.y = 0.0f;
         if (to.sqrMagnitude < 0.01f) return;
-        tr.rotation = Quaternion.RotateTowards(tr.rotation, Quaternion.LookRotation(to), turnSpeed * Time.deltaTime);
 
-        float facing = Vector3.Angle(tr.forward, to);
+        // 가는 길에 건물이 있으면 트인 쪽으로 방향을 틀어서 돌아감
+        Vector3 dir = to.magnitude > stop ? AvoidObstacles(to.normalized) : to.normalized;
+        desiredRotation = Quaternion.LookRotation(dir);
+
+        float facing = Vector3.Angle(tr.forward, dir);
         if (to.magnitude > stop && facing < 45.0f)
         {
-            tr.Translate(Vector3.forward * moveSpeed * Time.deltaTime);
+            desiredSpeed = moveSpeed;
         }
+    }
+
+    // 간단한 장애물 회피: 앞쪽으로 구(Sphere)를 쏴서 건물이 감지되면, 좌우로 각도를 넓혀 가며 트인 방향을 찾음
+    // (지형과 탱크는 장애물로 보지 않음: 지형은 넘어가고, 탱크는 공격 대상이거나 금방 비켜 가므로)
+    Vector3 AvoidObstacles(Vector3 dir)
+    {
+        if (IsClear(dir)) return dir;
+        float[] angles = { 30.0f, -30.0f, 60.0f, -60.0f, 90.0f, -90.0f };
+        foreach (float a in angles)
+        {
+            Vector3 d = Quaternion.Euler(0.0f, a, 0.0f) * dir;
+            if (IsClear(d)) return d;
+        }
+        return Quaternion.Euler(0.0f, 120.0f, 0.0f) * dir; // 사방이 막혔으면 크게 돌아감
+    }
+
+    bool IsClear(Vector3 dir)
+    {
+        Vector3 origin = tr.position + Vector3.up * 3.0f;
+        RaycastHit[] hits = Physics.SphereCastAll(origin, 4.0f, dir, lookAhead, ~(1 << 8), QueryTriggerInteraction.Ignore);
+        foreach (RaycastHit h in hits)
+        {
+            if (h.collider.transform.IsChildOf(tr)) continue;                  // 자기 자신
+            if (h.collider.GetComponentInParent<TankHealth>() != null) continue; // 다른 탱크
+            return false;                                                      // 건물 등 장애물
+        }
+        return true;
+    }
+
+    // 움직이려는데 제자리에 머물러 있으면(건물에 끼임) 잠깐 후진하면서 방향을 틀어 빠져나옴
+    void CheckBlocked()
+    {
+        if (escapeTimer > 0.0f) return;
+        blockedCheckTimer += Time.deltaTime;
+        if (blockedCheckTimer < 1.0f) return;
+
+        bool tryingToMove = Mathf.Abs(desiredSpeed) > 0.1f;
+        float moved = Vector3.Distance(tr.position, lastCheckPos);
+        blockedTime = (tryingToMove && moved < 1.0f) ? blockedTime + blockedCheckTimer : 0.0f;
+        blockedCheckTimer = 0.0f;
+        lastCheckPos = tr.position;
+
+        if (blockedTime >= 2.0f)
+        {
+            blockedTime = 0.0f;
+            escapeTimer = 1.5f;
+            escapeTurn = UnityEngine.Random.value < 0.5f ? -1.0f : 1.0f;
+        }
+    }
+
+    // 물리 이동: Translate(순간이동) 대신 Rigidbody 속도로 움직여서 건물에 막히게 함
+    void FixedUpdate()
+    {
+        if (isDead) return;
+        CheckBlocked();
+        if (escapeTimer > 0.0f)
+        {
+            escapeTimer -= Time.fixedDeltaTime;
+            desiredSpeed = -moveSpeed * 0.6f;
+            desiredRotation = rb.rotation * Quaternion.Euler(0.0f, escapeTurn * 90.0f, 0.0f);
+        }
+
+        rb.MoveRotation(Quaternion.RotateTowards(rb.rotation, desiredRotation, turnSpeed * Time.fixedDeltaTime));
+        Vector3 velocity = tr.forward * desiredSpeed;
+        velocity.y = rb.linearVelocity.y; // 중력은 물리 엔진에 맡김
+        rb.linearVelocity = velocity;
     }
 
     // 포탑과 포신을 탄도 계산 결과에 맞춰 회전. 조준이 거의 맞으면 true
@@ -264,6 +351,7 @@ public class EnemyTank : MonoBehaviour
     void Die()
     {
         isDead = true;
+        if (rb != null) rb.linearVelocity = new Vector3(0.0f, rb.linearVelocity.y, 0.0f); // 파괴된 뒤 미끄러지지 않게
         if (!isAlly) OnEnemyDied?.Invoke(this);
         if (CurrentBoss == this) CurrentBoss = null;
 

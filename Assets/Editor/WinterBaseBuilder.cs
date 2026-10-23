@@ -92,6 +92,56 @@ public static class WinterBaseBuilder
         Debug.Log($"겨울 기지 배치 완료: {root.transform.childCount}개. 위치는 직접 옮겨도 됩니다. Ctrl+S로 저장하세요.");
     }
 
+    // 메뉴 [Tools > TankAttack > Add Solid Colliders to Winter Base]
+    // 팩의 구조물은 모델 모양 그대로의 얇은 면(Mesh Collider)이라 비스듬히·빠르게 부딪히면 뚫리거나,
+    // 열린 격납고·감시탑 다리 사이처럼 빈 곳이 있음 → 모델 크기에 맞는 꽉 찬 Box Collider를 하나 더 씌움
+    [MenuItem("Tools/TankAttack/Add Solid Colliders to Winter Base")]
+    public static void AddSolidColliders()
+    {
+        GameObject root = GameObject.Find(RootName);
+        if (root == null)
+        {
+            Debug.LogError("씬에 WinterBase가 없습니다. scBattleField를 열고 실행하세요.");
+            return;
+        }
+
+        int count = 0;
+        foreach (Transform building in root.transform)
+        {
+            // 이전에 추가한 상자는 지우고 다시 계산
+            Transform old = building.Find("SolidCollider");
+            if (old != null) Undo.DestroyObjectImmediate(old.gameObject);
+
+            // 건물 기준(로컬) 좌표로 모든 메쉬를 감싸는 상자 계산 → 건물이 회전해 있어도 딱 맞음
+            bool has = false;
+            Bounds local = new Bounds();
+            foreach (MeshFilter mf in building.GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null) continue;
+                Bounds mb = mf.sharedMesh.bounds;
+                for (int i = 0; i < 8; i++)
+                {
+                    Vector3 corner = mb.center + Vector3.Scale(mb.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    Vector3 p = building.InverseTransformPoint(mf.transform.TransformPoint(corner));
+                    if (!has) { local = new Bounds(p, Vector3.zero); has = true; }
+                    else local.Encapsulate(p);
+                }
+            }
+            if (!has) continue;
+
+            GameObject solid = new GameObject("SolidCollider");
+            Undo.RegisterCreatedObjectUndo(solid, "Add Solid Colliders");
+            solid.transform.SetParent(building, false);
+            BoxCollider box = solid.AddComponent<BoxCollider>();
+            box.center = local.center;
+            box.size = local.size;
+            count++;
+        }
+
+        EditorSceneManager.MarkSceneDirty(root.scene);
+        Debug.Log($"구조물 {count}개에 꽉 찬 상자 콜라이더를 추가했습니다. Ctrl+S로 저장하세요.");
+    }
+
     // 메뉴 [Tools > TankAttack > Flatten Ground Under Winter Base]
     // WinterBase 아래 건물마다 바닥 넓이만큼 지형을 평평하게 다지고, 가장자리는 주변 지형과 부드럽게 이어지게 한 뒤
     // 건물을 그 높이에 정확히 올려놓는다. (땅에 묻히거나 떠 보이는 문제 해결)

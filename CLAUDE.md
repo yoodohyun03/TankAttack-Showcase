@@ -38,22 +38,38 @@
 - 사용자가 직접 짜 보고 싶다고 하면 정답 대신 힌트와 리뷰 위주로 도울 것
 - UI는 사용자가 직접 디자인할 예정 (강의 슬라이드 UI를 그대로 따라 하지 않음)
 - 커밋과 푸시는 사용자가 요청하면 Claude가 진행
+- **기능을 추가·수정하거나 버그를 고칠 때마다 문서를 함께 갱신할 것** (사용자 요청)
+  - `Docs/구현노트.md`: 기능별 구현 방법, 핵심 코드, 직접/AI 구분
+  - `Docs/기획.md`: 최종 게임 내용과 "기획 변경 이력" 표
+  - `Docs/AI활용.md`: 사용자의 판단·결정, 직접 발견한 문제, AI가 틀린 사례
+  - `scIntro` 조작법·안내 문구가 실제 게임과 맞는지
+- 문서에는 실제로 한 일만 적을 것. 커밋 전에 바뀐 파일을 확인해서 사실과 다른 기록이 없는지 점검
+- 문서 수정은 셸(`node -e`, `sed`) 대신 Edit/Write 도구로 할 것 (백틱이 셸 명령으로 실행되어 글자가 빠지거나 빈 파일이 생긴 적이 있음)
 
 ## 현재 구조
-- 씬: `Assets/01.Scenes/scBattleField.unity`
-- 진행 상황과 기능별 설명은 `Docs/구현노트.md` 참고
+- 씬 (Build 순서): `scIntro`(0) → `scBattleField`(1) → `scWin`(2) → `scLose`(3), 모두 `Assets/01.Scenes`
+- 진행 상황과 기능별 설명은 `Docs/구현노트.md`, 최종 기획은 `Docs/기획.md`, AI 활용 정리는 `Docs/AI활용.md`
 - 스크립트 (`Assets/02.Scripts`)
-  - 수업 코드: `TankMove`(이동), `TankAnim`(궤도 애니메이션), `SmoothFollow`(옛 카메라, `TankCamera`가 자동으로 끔)
-  - `TurretCtrl`: 화면 중앙(조준점)에서 Ray를 쏴 포탑 회전
-  - `CannonCtrl`: 마우스 휠로 포신 상하, `Mathf.Clamp`로 각도 제한
-  - `TankCamera`: 마우스로 도는 3인칭 카메라, 커서 잠금(Esc 해제)
-  - `FireCannon`: 포탄 3종(1/2/3키), 재장전, 공격력 배율(`damageMultiplier`)
-  - `Cannon`: 속도 직접 지정 발사(`launchSpeed`), 직격/범위 피해, 자기 피격·오인 사격·중복 폭발 방지
-  - `TankHealth`: 체력 공용 컴포넌트(`OnHpChanged`, `OnDeath` 이벤트)
-  - `EnemyTank`: 적 AI(추적·정지·후진, 탄도 조준, 뒤집힘 복구), `OnEnemyDied` 정적 이벤트
-  - `Ballistics`: 발사 각도 계산(적 AI, 지도 포격 공용)
-  - `WaveManager`: 5웨이브, 소환 위치 선정, 승패 판정, 난이도 배율, 임시 HUD
-- `Assets/Editor/EnemyPrefabBuilder.cs`: 메뉴 `Tools > TankAttack > Build Enemy Prefabs`로 적 3종 프리팹 생성 (수치를 바꾸면 다시 실행)
-- 포탄 프리팹, 발사 사운드, 적 프리팹(`Enemies/`)은 `Assets/Resources`에 있음
-- 임시 UI는 `OnGUI`로 표시 중. 사용자가 직접 UI를 만들면 각 스크립트의 이벤트에 연결하고 OnGUI를 끌 것
-- 주의: `Assets/03.Prefabs/ExplosionPack` 폭발 프리팹은 파티클이 깨져 있음 → 교체 필요
+  - 수업 코드: `TankMove`(이동, 건물 관통 버그 때문에 `Translate` 대신 `FixedUpdate`에서 Rigidbody 속도로 이동하도록 수정), `TankAnim`(궤도 애니메이션), `SmoothFollow`(옛 카메라, `TankCamera`가 자동으로 끔)
+  - `TurretCtrl`: `TankCamera.AimPoint`(화면 중앙 조준점)로 포탑 회전
+  - `CannonCtrl`: 조준점 기준 포신 각도(일반: 직선, 정밀·지도 포격: 탄도 계산), `Mathf.Clamp`로 각도 제한 (사용자가 직접 짠 구조)
+  - `TankCamera`: 마우스 시점 카메라, 우클릭 정밀 조준(줌), 조준점 계산, `AimOverride`(지도 포격용)
+  - `FireCannon`: 포탄 3종(1/2/3키), 재장전, 조준 모드별 명중 오차, `FireAt()`(지도 포격), 공격력 배율
+  - `Cannon`: 속도 직접 지정 발사, 직격/범위 피해, 같은 진영 오인 사격·자기 피격·중복 폭발 방지
+  - `TankHealth`: 체력 공용 컴포넌트, 진영(`Team`), `OnHpChanged`/`OnDeath`, 파괴 폭발
+  - `EnemyTank`: 적·아군·보스 공용 AI(가장 가까운 상대 진영 추적, 탄도 조준, 보스 광폭화, 물리 이동, 장애물 회피, 끼임 탈출, 뒤집힘 복구), `OnEnemyDied`, `CurrentBoss`
+  - `Ballistics`: 발사 각도 계산(적 AI, 정밀 조준, 지도 포격 공용)
+  - `WaveManager`: 5웨이브, 마지막 보스, 아군 소환·증원, 소환 위치 검사, 승패 판정, 적 위치 표시, `SkipToLastWave`(보스전 바로가기)
+  - `MapStrike`: M키 전술 지도(확대·이동), 목표 지정, 4연발 포격, 쿨타임
+  - `Item`, `ItemDropper`: 아이템 3종과 드롭 (사용자가 입력)
+  - `SceneLoader`: 씬 전환 버튼, 보스전 바로가기 (사용자가 입력)
+  - `GameHUD`: 게임 HUD와 보스 HP바
+- 에디터 도구 (`Assets/Editor`, 메뉴 `Tools > TankAttack`)
+  - `EnemyPrefabBuilder`: 적 3종·보스·아군 프리팹 생성 (수치를 바꾸면 다시 실행)
+  - `UrpParticleMaterialConverter`: URP 전용 폭발 머티리얼을 Built-in으로 변환
+  - `HudLayoutTool`: HUD 자동 배치, 보스 HP바·보스전 바로가기 버튼 추가 (HUD는 사용자가 직접 다듬었으므로 Layout Game HUD는 다시 실행하지 말 것)
+  - `ItemDecorator`: 아이템 모양·조명 (사용자가 다듬은 뒤에는 다시 실행하지 말 것)
+  - `WinterBaseBuilder`: 흰색 계열 군사 기지 배치, 건물 밑 지형 평탄화
+- `Assets/Resources`: 포탄, 발사 사운드, `Enemies/`(적·보스), `Allies/`, `Items/`, `TankExplosion`
+- 무료 에셋: Dynamic Snow System(눈 텍스처), Cinematic Explosions FREE(`Mirza Beig`, 머티리얼 변환함), Military Base Pack(`Tiny Teacup Studio`, 데모 폴더 삭제함)
+- 임시 `OnGUI` 표시는 각 스크립트의 스위치로 꺼 둠. 적 위치 표시와 지도 화면은 유지
