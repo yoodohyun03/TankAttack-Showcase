@@ -10,6 +10,8 @@
   - 이 저장소의 기록에서 `Assets/02.Scripts`, `Assets/Editor`, `Docs`, `CLAUDE.md`, `.gitignore`만 남기고(`git filter-branch`), 커밋 메시지를 한국어로 옮긴 복사본 + README
   - Asset Store 에셋, 수업 예제 원본, Photon 설정은 라이선스·보안상 절대 올리지 말 것
   - 자동으로 동기화되지 않음 → 제출 전에 코드나 문서가 바뀌면 쇼케이스도 갱신 필요
+- Photon 패키지는 수업 예제에 들어 있던 것으로 중간과제에서는 사용하지 않음. `PhotonServerSettings`의 AppId는 빌드에 포함되지 않도록 비워 둠 (2026-10-24)
+- Product Name은 `FrozenFront` (실행 파일과 `_Data` 폴더 이름이 압축 해제 시 깨지지 않도록 영문만)
 
 ## 마감 · 제출 (2026-10-25)
 1. 게임 실행파일 .zip → 교수님 이메일
