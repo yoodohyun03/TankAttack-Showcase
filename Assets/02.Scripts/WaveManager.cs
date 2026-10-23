@@ -53,6 +53,8 @@ public class WaveManager : MonoBehaviour
     public float spawnRadiusMax = 240.0f;
     public float maxSpawnSlope = 20.0f;       // 이보다 가파른 비탈에는 소환하지 않음 (도)
     public float maxSpawnHeightDiff = 25.0f;  // 플레이어와 높이 차가 이보다 크면 소환하지 않음 (산 위 방지)
+    public float maxPathRise = 15.0f;         // 플레이어까지 가는 길에 이보다 높은 산등성이가 있으면 소환하지 않음 (m)
+    public float maxPathSlope = 30.0f;        // 플레이어까지 가는 길에 이보다 가파른 곳이 있으면 소환하지 않음 (도)
 
     [Header("엔딩 씬 이름 (Build Settings에 등록되어 있어야 이동)")]
     public string winSceneName = "scWin";
@@ -288,6 +290,30 @@ public class WaveManager : MonoBehaviour
         ground = GroundAt(pos);
         if (Mathf.Abs(ground.y - player.position.y) > maxSpawnHeightDiff) return false;
         if (!IsFreeOfBuildings(ground)) return false;
+        if (!HasClearPathToPlayer(ground)) return false;
+        return true;
+    }
+
+    // 소환 위치에서 플레이어까지 직선으로 가는 길에 넘을 수 없는 산등성이나 급경사가 없는지 확인
+    // (적 AI는 길 찾기 없이 거의 직진하므로, 전장을 둘러싼 산 바깥에 생기면 안으로 들어오지 못함)
+    bool HasClearPathToPlayer(Vector3 from)
+    {
+        Vector3 to = player.position;
+        float baseY = Mathf.Max(from.y, to.y);
+        float dist = Vector3.Distance(new Vector3(from.x, 0, from.z), new Vector3(to.x, 0, to.z));
+        int steps = Mathf.CeilToInt(dist / 5.0f); // 5m 간격으로 확인
+        Vector3 tPos = terrain.transform.position;
+        Vector3 size = terrain.terrainData.size;
+
+        for (int i = 1; i < steps; i++)
+        {
+            Vector3 p = Vector3.Lerp(from, to, i / (float)steps);
+            float h = terrain.SampleHeight(p) + tPos.y;
+            if (h - baseY > maxPathRise) return false; // 중간에 높은 산등성이
+
+            float steep = terrain.terrainData.GetSteepness((p.x - tPos.x) / size.x, (p.z - tPos.z) / size.z);
+            if (steep > maxPathSlope) return false;    // 전차가 오를 수 없는 급경사
+        }
         return true;
     }
 

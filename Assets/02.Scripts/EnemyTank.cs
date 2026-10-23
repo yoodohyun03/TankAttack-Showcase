@@ -62,10 +62,15 @@ public class EnemyTank : MonoBehaviour
 
     // 물리 이동 (Update에서 정하고 FixedUpdate에서 적용)
     public float lookAhead = 25.0f;      // 장애물 감지 거리
+    public float gravityMultiplier = 2.5f; // 큰 탱크 모델이 천천히 떨어져 보이지 않도록 탱크에만 중력 추가 (TankMove와 같음)
     Rigidbody rb;
     float desiredSpeed;                  // 이번 프레임에 원하는 전진(+)/후진(-) 속도
     Quaternion desiredRotation;          // 이번 프레임에 향하고 싶은 방향
     Vector3 lastCheckPos;
+
+    // 아군 자리 나누기: 생성되는 순서대로 오른쪽(1), 왼쪽(-1)을 번갈아 배정
+    static int allySpawnCount;
+    float followSide = 1.0f;
     float blockedCheckTimer, blockedTime, escapeTimer, escapeTurn;
     bool isDead = false;
 
@@ -74,6 +79,7 @@ public class EnemyTank : MonoBehaviour
         tr = transform;
         health = GetComponent<TankHealth>();
         health.team = isAlly ? TankHealth.Team.Player : TankHealth.Team.Enemy;
+        if (isAlly) followSide = (allySpawnCount++ % 2 == 0) ? 1.0f : -1.0f;
         sfx = GetComponent<AudioSource>();
         shellPrefab = Resources.Load<GameObject>("Cannon");
         fireSfx = Resources.Load<AudioClip>("CannonFire");
@@ -134,7 +140,12 @@ public class EnemyTank : MonoBehaviour
         if (target == null)
         {
             // 싸울 상대가 없을 때: 아군은 플레이어를 따라다님, 적은 대기
-            if (isAlly && player != null) MoveToward(player.position, followDistance);
+            // 아군끼리 같은 자리로 모이지 않도록 각자 플레이어의 오른쪽/왼쪽 뒤 자리를 따라다님
+            if (isAlly && player != null)
+            {
+                Vector3 slot = player.position + player.right * followSide * followDistance - player.forward * 10.0f;
+                MoveToward(slot, 8.0f);
+            }
             return;
         }
 
@@ -234,13 +245,38 @@ public class EnemyTank : MonoBehaviour
 
         // 가는 길에 건물이 있으면 트인 쪽으로 방향을 틀어서 돌아감
         Vector3 dir = to.magnitude > stop ? AvoidObstacles(to.normalized) : to.normalized;
+        // 같은 편 탱크와 너무 가까우면 서로 밀어내는 방향으로 틀어서 부딪히지 않게
+        dir = AddSeparation(dir, out bool friendAhead);
         desiredRotation = Quaternion.LookRotation(dir);
 
         float facing = Vector3.Angle(tr.forward, dir);
-        if (to.magnitude > stop && facing < 45.0f)
+        if (to.magnitude > stop && facing < 45.0f && !friendAhead)
         {
             desiredSpeed = moveSpeed;
         }
+    }
+
+    // 같은 진영 탱크(플레이어 포함)와 거리 두기
+    // - 가까울수록 반대 방향으로 미는 힘을 더함
+    // - 바로 앞(30° 안, 12m 안)에 있으면 전진을 멈춤
+    Vector3 AddSeparation(Vector3 dir, out bool friendAhead)
+    {
+        const float range = 18.0f;
+        friendAhead = false;
+        Vector3 push = Vector3.zero;
+        foreach (TankHealth h in FindObjectsByType<TankHealth>(FindObjectsSortMode.None))
+        {
+            if (h == health || h.IsDead || h.team != health.team) continue;
+            Vector3 away = tr.position - h.transform.position;
+            away.y = 0.0f;
+            float d = away.magnitude;
+            if (d > range || d < 0.01f) continue;
+            push += away.normalized * (1.0f - d / range);
+            if (d < 12.0f && Vector3.Angle(tr.forward, -away) < 30.0f) friendAhead = true;
+        }
+        Vector3 result = dir + push * 1.5f;
+        result.y = 0.0f;
+        return result.sqrMagnitude > 0.01f ? result.normalized : dir;
     }
 
     // 간단한 장애물 회피: 앞쪽으로 구(Sphere)를 쏴서 건물이 감지되면, 좌우로 각도를 넓혀 가며 트인 방향을 찾음
@@ -306,7 +342,17 @@ public class EnemyTank : MonoBehaviour
         rb.MoveRotation(Quaternion.RotateTowards(rb.rotation, desiredRotation, turnSpeed * Time.fixedDeltaTime));
         Vector3 velocity = tr.forward * desiredSpeed;
         velocity.y = rb.linearVelocity.y; // 중력은 물리 엔진에 맡김
+        velocity.y = Mathf.Min(velocity.y, 2.0f); // 충돌로 위로 솟구치는 속도 제한 (떨어지는 건 그대로)
         rb.linearVelocity = velocity;
+
+        // 추가 중력 (기본 1배는 물리 엔진이 줌)
+        rb.AddForce(Physics.gravity * (gravityMultiplier - 1.0f), ForceMode.Acceleration);
+
+        // 충돌로 생긴 앞뒤·좌우로 넘어가는 회전을 매 프레임 줄임 (언덕에서 기우는 건 지형이 계속 받쳐 줘서 유지됨)
+        Vector3 av = rb.angularVelocity;
+        av.x *= 0.8f;
+        av.z *= 0.8f;
+        rb.angularVelocity = av;
     }
 
     // 포탑과 포신을 탄도 계산 결과에 맞춰 회전. 조준이 거의 맞으면 true

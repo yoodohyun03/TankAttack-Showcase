@@ -4,6 +4,9 @@ public class TankMove : MonoBehaviour
 {
     public float moveSpeed = 20.0f;
     public float rotSpeed = 50.0f;
+    // 탱크 모델이 실제보다 커서(길이 약 17m) 보통 중력으로는 천천히 떨어지는 것처럼 보임 → 탱크에만 중력을 더 줌
+    // (전체 중력을 바꾸면 포탄 탄도·사거리가 달라지므로 Physics.gravity는 그대로 둠)
+    public float gravityMultiplier = 2.5f;
     Rigidbody rbody;
     Transform tr;
     float h, v;
@@ -36,7 +39,16 @@ public class TankMove : MonoBehaviour
         rbody.MoveRotation(rbody.rotation * turn);
 
         Vector3 velocity = tr.forward * v * moveSpeed;
-        velocity.y = rbody.linearVelocity.y; // 위아래(중력) 속도는 물리 엔진에 맡김
+        velocity.y = Mathf.Min(rbody.linearVelocity.y, 2.0f); // 중력은 물리 엔진에 맡기되, 충돌로 솟구치는 속도는 제한
         rbody.linearVelocity = velocity;
+
+        // 추가 중력: 기본 중력 1배는 물리 엔진이 주므로 나머지(배율 - 1)만큼 더함 (질량과 상관없는 가속도로)
+        rbody.AddForce(Physics.gravity * (gravityMultiplier - 1.0f), ForceMode.Acceleration);
+
+        // 충돌로 생긴 앞뒤·좌우로 넘어가는 회전을 줄여서 뒤집히지 않게
+        Vector3 av = rbody.angularVelocity;
+        av.x *= 0.8f;
+        av.z *= 0.8f;
+        rbody.angularVelocity = av;
     }
 }
